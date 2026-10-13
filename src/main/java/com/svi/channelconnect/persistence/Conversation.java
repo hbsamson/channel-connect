@@ -13,6 +13,9 @@ public class Conversation {
     @Id
     private UUID id;
 
+    @Column(name = "channel", nullable = false)
+    private String channel;
+
     @Column(name = "page_id", nullable = false)
     private String pageId;
 
@@ -37,8 +40,9 @@ public class Conversation {
     protected Conversation() {
     }
 
-    public Conversation(String pageId, String psid, Instant now) {
+    public Conversation(String channel, String pageId, String psid, Instant now) {
         this.id = UUID.randomUUID();
+        this.channel = channel;
         this.pageId = pageId;
         this.psid = psid;
         this.createdAt = now;
@@ -47,6 +51,10 @@ public class Conversation {
 
     public UUID getId() {
         return id;
+    }
+
+    public long getMessageSequence() {
+        return incomingCount + outgoingCount;
     }
 
     public void recordIncoming(Instant now) {

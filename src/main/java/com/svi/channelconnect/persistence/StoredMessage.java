@@ -31,17 +31,26 @@ public class StoredMessage {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "message_sequence", nullable = false)
+    private long messageSequence;
+
     protected StoredMessage() {
     }
 
     public StoredMessage(UUID conversationId, MessageDirection direction, String externalMessageId,
                          String content, Instant createdAt) {
+        this(conversationId, direction, externalMessageId, content, createdAt, 0);
+    }
+
+    public StoredMessage(UUID conversationId, MessageDirection direction, String externalMessageId,
+                         String content, Instant createdAt, long messageSequence) {
         this.id = UUID.randomUUID();
         this.conversationId = conversationId;
         this.direction = direction;
         this.externalMessageId = externalMessageId;
         this.content = content;
         this.createdAt = createdAt;
+        this.messageSequence = messageSequence;
     }
 
     public MessageDirection getDirection() {

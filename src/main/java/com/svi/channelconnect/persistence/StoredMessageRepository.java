@@ -10,10 +10,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface StoredMessageRepository extends JpaRepository<StoredMessage, UUID> {
-    boolean existsByDirectionAndExternalMessageId(MessageDirection direction, String externalMessageId);
+    boolean existsByConversationIdAndDirectionAndExternalMessageId(UUID conversationId,
+            MessageDirection direction, String externalMessageId);
 
     @Query("select m from StoredMessage m where m.conversationId = :conversationId "
-            + "and m.createdAt >= :cutoff order by m.createdAt desc, m.id desc")
+            + "and m.createdAt >= :cutoff order by m.messageSequence desc, m.id desc")
     List<StoredMessage> findRecent(@Param("conversationId") UUID conversationId,
                                    @Param("cutoff") Instant cutoff, Pageable pageable);
 

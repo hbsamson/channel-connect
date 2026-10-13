@@ -49,17 +49,18 @@ public class ConversationService {
 
     @Transactional
     public Optional<UUID> recordIncoming(IncomingMessageDTO incoming) {
-        if (messages.existsByDirectionAndExternalMessageId(MessageDirection.INCOMING,
+        Instant now = clock.instant();
+        Conversation conversation = conversations.findByChannelAndPageIdAndPsid(
+                incoming.channel(), incoming.pageId(), incoming.senderId())
+                .orElseGet(() -> new Conversation(incoming.channel(), incoming.pageId(), incoming.senderId(), now));
+        if (messages.existsByConversationIdAndDirectionAndExternalMessageId(conversation.getId(), MessageDirection.INCOMING,
                 incoming.externalMessageId())) {
             return Optional.empty();
         }
-        Instant now = clock.instant();
-        Conversation conversation = conversations.findByPageIdAndPsid(incoming.pageId(), incoming.senderId())
-                .orElseGet(() -> new Conversation(incoming.pageId(), incoming.senderId(), now));
         conversation.recordIncoming(now);
         conversations.save(conversation);
         messages.save(new StoredMessage(conversation.getId(), MessageDirection.INCOMING,
-                incoming.externalMessageId(), incoming.content(), now));
+                incoming.externalMessageId(), incoming.content(), now, conversation.getMessageSequence()));
         statistic(now).recordIncoming();
         return Optional.of(conversation.getId());
     }
@@ -80,7 +81,7 @@ public class ConversationService {
         Instant now = clock.instant();
         conversation.recordOutgoing(now);
         messages.save(new StoredMessage(conversationId, MessageDirection.OUTGOING, providerMessageId,
-                content, now));
+                content, now, conversation.getMessageSequence()));
         statistic(now).recordOutgoing();
     }
 
