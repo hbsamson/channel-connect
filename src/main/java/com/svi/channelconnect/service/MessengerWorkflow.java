@@ -4,9 +4,11 @@ import com.svi.channelconnect.dto.IncomingMessageDTO;
 import com.svi.channelconnect.dto.OutgoingMessageDTO;
 import com.svi.channelconnect.dto.SendMessageResponseDTO;
 import com.svi.channelconnect.exception.ProviderException;
+import com.svi.channelconnect.exception.SafeExceptionLog;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -26,21 +28,44 @@ public class MessengerWorkflow {
 
     public synchronized void process(IncomingMessageDTO incoming) {
         UUID conversationId = null;
+        String stage = "incoming_persistence";
+        String previousCorrelation = MDC.get("correlationId");
+        MDC.put("correlationId", UUID.randomUUID().toString());
         try {
+            LOGGER.info("Messenger processing stage={}", stage);
             var recorded = conversations.recordIncoming(incoming);
             if (recorded.isEmpty()) {
+                LOGGER.info("Messenger processing stage=duplicate_skipped");
                 return;
             }
             conversationId = recorded.get();
-            String reply = processor.generateReply(conversationId, conversations.recentHistory(conversationId));
+            stage = "history_loading";
+            LOGGER.info("Messenger processing conversation={} stage={}", conversationId, stage);
+            var history = conversations.recentHistory(conversationId);
+            stage = "openai_generation";
+            LOGGER.info("Messenger processing conversation={} stage={} history_messages={}", conversationId, stage, history.size());
+            String reply = processor.generateReply(conversationId, history);
+            if (reply == null || reply.isBlank()) {
+                throw new ProviderException("empty_reply");
+            }
+            stage = "messenger_delivery";
+            LOGGER.info("Messenger processing conversation={} stage={} reply_chars={}", conversationId, stage, reply.length());
             SendMessageResponseDTO sent = channel.sendMessage(new OutgoingMessageDTO(incoming.senderId(), reply));
+            stage = "outgoing_persistence";
+            LOGGER.info("Messenger processing conversation={} stage={}", conversationId, stage);
             conversations.recordOutgoing(conversationId, sent.providerMessageId(), reply);
             LOGGER.info("Messenger reply sent for conversation={}", conversationId);
         } catch (ProviderException exception) {
-            LOGGER.warn("Messenger workflow provider failure for conversation={}, category={}",
-                    conversationId, exception.getCategory());
+            LOGGER.warn("Messenger processing failed conversation={} stage={} provider={} category={}",
+                    conversationId, stage, exception.getProvider(), exception.getCategory(), SafeExceptionLog.sanitized(exception));
         } catch (Exception exception) {
-            LOGGER.error("Messenger workflow failed for conversation={}", conversationId, exception);
+            LOGGER.error("Messenger processing failed conversation={} stage={}", conversationId, stage, SafeExceptionLog.sanitized(exception));
+        } finally {
+            if (previousCorrelation == null) {
+                MDC.remove("correlationId");
+            } else {
+                MDC.put("correlationId", previousCorrelation);
+            }
         }
     }
 
