@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ConversationRepository extends JpaRepository<Conversation, UUID> {
-    Optional<Conversation> findByPageIdAndPsid(String pageId, String psid);
+    Optional<Conversation> findByChannelAndPageIdAndPsid(String channel, String pageId, String psid);
 
     @Modifying(clearAutomatically = true)
     @Query("update Conversation c set c.psid = null, c.anonymizedAt = :now "

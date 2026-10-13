@@ -26,12 +26,11 @@ import org.springframework.web.client.RestClientResponseException;
 public class OpenAiResponsesClient implements MessageProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenAiResponsesClient.class);
     public static final String NO_SOURCE_REPLY = "I don't have enough information in the available documents to answer that.";
-    private static final String INSTRUCTIONS = "You are a concise Messenger assistant. Use file_search for the "
+    private static final String INSTRUCTIONS = "Use file_search for the "
             + "current user question. Answer only with facts supported by the retrieved documents. "
             + "If the documents do not answer the question, say that the information is unavailable. "
             + "Do not include file names or citations in the Messenger reply.";
-    private static final String GENERAL_INSTRUCTIONS = "You are a concise Messenger assistant. "
-            + "Answer the user's question helpfully. No reference documents are currently available. "
+    private static final String GENERAL_INSTRUCTIONS = "No reference documents are currently available. "
             + "Do not claim to have consulted documents or invent organization-specific information.";
 
     private final RestClient client;
@@ -113,7 +112,8 @@ public class OpenAiResponsesClient implements MessageProcessor {
         }
         Map<String, Object> body = new HashMap<>(Map.of(
                 "model", properties.model(),
-                "instructions", hasVectorStore() ? INSTRUCTIONS : GENERAL_INSTRUCTIONS,
+                "instructions", properties.assistantInstructions() + " "
+                        + (hasVectorStore() ? INSTRUCTIONS : GENERAL_INSTRUCTIONS),
                 "input", input,
                 "max_output_tokens", properties.maxOutputTokens(),
                 "store", false));
