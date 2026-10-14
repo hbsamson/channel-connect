@@ -76,6 +76,47 @@ class SmsPersistenceTests {
 			assertThat(store.pendingOutbound()).extracting(com.svi.channelconnect.sms.model.SmsOutbound::accountId).containsExactlyInAnyOrder("sim-1", "sim-2");
 		}
 	}
+	@Test void upgradesExistingInboxAndKeepsCursorAndRemoteBaselineAcrossReopen() {
+		String url = "jdbc:h2:file:" + directory.resolve("upgrade").toString().replace('\\', '/') + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE";
+		long firstCursor;
+		try (var ds = datasource(url)) {
+			Flyway.configure().dataSource(ds).locations("classpath:db/migration").target("4").load().migrate();
+			JdbcClient.create(ds).sql("INSERT INTO sms_inbox(id, account_id, receive_id, sender, content, fingerprint, received_at, status, next_attempt_at) VALUES ('old-1', 'sim-1', 77, '+639000000001', 'Retained receipt', 'test', 100, 'RECEIVED', 100)").update();
+			Flyway.configure().dataSource(ds).locations("classpath:db/migration").load().migrate();
+			var store = repository(ds);
+			firstCursor = store.received("sim-1", null, 0, 10).getFirst().cursor();
+			assertThat(firstCursor).isPositive();
+			assertThat(transaction(ds).<Long>execute(status -> store.receiveBaseline("source", 1234))).isEqualTo(1234L);
+		}
+		try (var ds = datasource(url)) {
+			var store = repository(ds);
+			assertThat(store.received("sim-1", null, 0, 10).getFirst().cursor()).isEqualTo(firstCursor);
+			assertThat(transaction(ds).<Long>execute(status -> store.receiveBaseline("source", 9999))).isEqualTo(1234L);
+			transaction(ds).executeWithoutResult(status -> store.acceptRemote("sim-1", 78, "+639000000001", "New reply", 200));
+			var next = store.received("sim-1", "+639000000001", firstCursor, 10);
+			assertThat(next).hasSize(1);
+			assertThat(next.getFirst().content()).isEqualTo("New reply");
+			assertThat(next.getFirst().receivedAt()).isEqualTo(200);
+			assertThat(store.received("sim-2", null, 0, 10)).isEmpty();
+		}
+	}
+	@Test void ordersConversationByTransmissionRatherThanQueueTime() {
+		try (var ds = datasource("jdbc:h2:mem:smshistoryorder;DB_CLOSE_DELAY=-1")) {
+			Flyway.configure().dataSource(ds).locations("classpath:db/migration").load().migrate();
+			var db = JdbcClient.create(ds);
+			var store = repository(ds);
+			var tx = transaction(ds);
+			tx.executeWithoutResult(status -> {
+				store.acceptRemote("sim-1", 123, "+639000000001", "Customer first", 200);
+				String id = store.pendingInbound().getFirst().id();
+				store.claimInbound(id); store.completeInbound(id);
+				String outbound = store.enqueue("delayed", "sim-1", "+639000000001", "Delayed assistant", null).messageId();
+				db.sql("UPDATE sms_outbox SET created_at = 100, transmitted_at = 300, status = 'GATEWAY_SENT' WHERE id = ?").param(outbound).update();
+			});
+			assertThat(store.conversationHistory("sim-1", "+639000000001", "none")).extracting(turn -> turn.get("content"))
+					.containsExactly("Customer first", "Delayed assistant");
+		}
+	}
 	private SmsMessageRepository repository(HikariDataSource ds) {
 		var db = JdbcClient.create(ds); return new SmsMessageRepository(db, SmsTestProperties.properties(Map.of()), clock, new DealershipRepository(db, new ObjectMapper()));
 	}

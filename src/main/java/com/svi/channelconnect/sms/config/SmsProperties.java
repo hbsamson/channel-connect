@@ -33,7 +33,7 @@ public record SmsProperties(
 		@DefaultValue("30d") Duration contentRetention,
 		@DefaultValue("90d") Duration idRetention,
 		@DefaultValue("10s") Duration shutdownTimeout) {
-	public enum Mode { MOCK, LIVE, HTTP }
+	public enum Mode { MOCK, LIVE, HTTP, HTTP_API }
 
 	public SmsProperties {
 		channels = channels == null ? List.of() : List.copyOf(channels);
@@ -53,7 +53,8 @@ public record SmsProperties(
 			Set<String> simMappings = new HashSet<>();
 			java.util.Map<String, String> deviceAddresses = new java.util.HashMap<>();
 			for (Channel channel : channels) {
-				if (!accounts.add(channel.accountId()) || (mode != Mode.HTTP && !identities.add(address(channel.sourceAddress()).getHostAddress() + "/" + channel.authId()))
+				if (!accounts.add(channel.accountId()) || ((mode == Mode.MOCK || mode == Mode.LIVE)
+						&& !identities.add(address(channel.sourceAddress()).getHostAddress() + "/" + channel.authId()))
 						|| !simMappings.add(channel.deviceId() + "/" + channel.simChannel())) invalid();
 				String previous = deviceAddresses.putIfAbsent(channel.deviceId(), address(channel.sourceAddress()).getHostAddress());
 				if (previous != null && !previous.equals(address(channel.sourceAddress()).getHostAddress())) invalid();
@@ -66,6 +67,7 @@ public record SmsProperties(
 			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress())) invalid();
 			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> c.maxConcurrentSessions() != 1)) invalid();
 			if (mode == Mode.HTTP && (!liveAuthorized || channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress()))) invalid();
+			if (mode == Mode.HTTP_API && !liveAuthorized) invalid();
 		}
 	}
 

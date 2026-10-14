@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import com.svi.channelconnect.dealership.persistence.DealershipRepository;
 import com.svi.channelconnect.sms.config.SmsProperties;
 import com.svi.channelconnect.sms.exception.SmsException;
+import com.svi.channelconnect.sms.dto.response.SmsMessageStatus;
 import com.svi.channelconnect.sms.model.SmsSubmission;
 import com.svi.channelconnect.sms.persistence.SmsMessageRepository;
 
@@ -20,6 +21,10 @@ public class SmsService {
 	}
 	public SmsSubmission submit(String key, String account, String recipient, String content) {
 		return submitWorkflow("api:" + SmsValidation.key(key), account, recipient, content, null);
+	}
+	public SmsMessageStatus status(String id) {
+		var message = store.outbound(id).orElseThrow(() -> new SmsException(SmsException.Reason.NOT_FOUND));
+		return new SmsMessageStatus(message.id(), message.status(), "UNCONFIRMED", store.errorCode(message.id()));
 	}
 	public SmsSubmission submitWorkflow(String key, String account, String recipient, String content, String dealerMessageId) {
 		String normalized = validate(account, recipient, content);

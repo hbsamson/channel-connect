@@ -24,8 +24,8 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/webhooks/messenger", "/webhooks/whatsapp", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/messenger", "/webhooks/whatsapp", "/api/v1/whatsapp/messages").permitAll()
                         // Local/test SMS controllers additionally require the SMS bearer filter.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/sms/messages").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/sms/messages/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/sms/messages", "/api/v1/sms/send").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/sms/messages/*", "/api/v1/sms/receive").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/admin/conversations/*").hasRole("ADMIN")
                         .requestMatchers("/api/admin/demo/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/sms/**").hasRole("ADMIN")

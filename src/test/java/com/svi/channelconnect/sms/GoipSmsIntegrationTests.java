@@ -60,6 +60,7 @@ class GoipSmsIntegrationTests {
 	@Autowired SmsMessageRepository messages;
 	@Autowired GoipSmsProvider provider;
 	@Autowired SmsWorkDispatcher dispatcher;
+	@Autowired com.svi.channelconnect.sms.service.SmsReceiveService receive;
 	@Autowired DealershipRepository customers;
 	@Autowired JdbcClient db;
 	@Autowired MockMvc mvc;
@@ -187,6 +188,64 @@ class GoipSmsIntegrationTests {
 	@Test void supportsReadOnlyStatusQueries() throws Exception {
 		assertThat(provider.query("sim-1", false)).isEqualTo("IDLE");
 		assertThat(provider.statuses()).allMatch(s -> s.available());
+	}
+	@Test void acceptsLlmReplyTextThroughSendWithoutCallingAi() throws Exception {
+		String request = "{\"accountId\":\"sim-1\",\"recipient\":\"09000000001\",\"content\":\"Please choose an appointment date.\"}";
+		mvc.perform(post("/api/v1/sms/send").contentType("application/json").content(request)).andExpect(status().isUnauthorized());
+		mvc.perform(post("/api/v1/sms/send").header("Authorization", "Bearer test-sms-api-token").header("Idempotency-Key", "generated-reply")
+				.contentType("application/json").content(request)).andExpect(status().isAccepted()).andExpect(jsonPath("$.status").value("QUEUED"));
+		verifyNoInteractions(ai);
+		await(() -> messages.outboundBacklog() == 0, true);
+	}
+	@Test void pollsReceiptsByCursorWithoutConsumingOrReprocessingThem() throws Exception {
+		mvc.perform(get("/api/v1/sms/receive").param("accountId", "sim-1")).andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/v1/sms/receive").header("Authorization", "Bearer test-sms-api-token").param("accountId", "sim-1").param("after", "bad"))
+				.andExpect(status().isBadRequest());
+		mvc.perform(get("/api/v1/sms/receive").header("Authorization", "Bearer test-sms-api-token").param("accountId", "unknown").param("waitSeconds", "0"))
+				.andExpect(status().isForbidden());
+		var waiting = mvc.perform(get("/api/v1/sms/receive").header("Authorization", "Bearer test-sms-api-token").param("accountId", "sim-1"))
+				.andExpect(request().asyncStarted()).andReturn();
+		provider.simulator().inbound("sim-2", 200030, "+639000000001", "Other SIM").get(5, TimeUnit.SECONDS);
+		provider.simulator().inbound("sim-1", 200031, "+639000000001", "Appointment question").get(5, TimeUnit.SECONDS);
+		receive.refresh();
+		var response = mvc.perform(asyncDispatch(waiting)).andExpect(status().isOk()).andExpect(jsonPath("$.messages.length()").value(1))
+				.andExpect(jsonPath("$.messages[0].content").value("Appointment question")).andReturn();
+		long cursor = new tools.jackson.databind.ObjectMapper().readTree(response.getResponse().getContentAsString()).get("nextCursor").asLong();
+		var next = mvc.perform(get("/api/v1/sms/receive").header("Authorization", "Bearer test-sms-api-token").param("accountId", "sim-1")
+				.param("after", Long.toString(cursor)).param("waitSeconds", "0")).andReturn();
+		mvc.perform(asyncDispatch(next)).andExpect(status().isOk()).andExpect(jsonPath("$.messages.length()").value(0)).andExpect(jsonPath("$.nextCursor").value(cursor));
+		verifyNoInteractions(ai);
+		await(() -> messages.inboundBacklog() == 0 && messages.outboundBacklog() == 0, true);
+		verify(ai, times(2)).generateResponse(any());
+	}
+	@Test void retainsOpeningAndEverySmsTurnBeyondTwentyMessages() throws Exception {
+		for (int i = 0; i < 12; i++) {
+			messages.accept("sim-1", 300000 + i, "+639000000001", "Retained customer turn " + i);
+			String id = db.sql("SELECT id FROM sms_inbox WHERE receive_id = ?").param(300000 + i).query(String.class).single();
+			messages.claimInbound(id); messages.completeInbound(id);
+			var sent = sms.submit("history-" + i, "sim-1", "+639000000001", "Retained assistant turn " + i);
+			messages.finish(sent.messageId(), "GATEWAY_SENT", null);
+		}
+		var failed = sms.submit("history-failed", "sim-1", "+639000000001", "Unsent failure marker");
+		messages.finish(failed.messageId(), "FAILED", "TEST_FAILURE");
+		var unrelated = sms.submit("history-other", "sim-2", "+639000000001", "Other account marker");
+		messages.finish(unrelated.messageId(), "GATEWAY_SENT", null);
+		provider.simulator().inbound("sim-1", 300100, "+639000000001", "Latest question").get(5, TimeUnit.SECONDS);
+		await(() -> messages.inboundBacklog() == 0 && messages.outboundBacklog() == 0, true);
+		var prompt = org.mockito.ArgumentCaptor.forClass(com.svi.channelconnect.ai.dto.AiRequest.class);
+		verify(ai).generateResponse(prompt.capture());
+		assertThat(prompt.getValue().message()).contains("Retained customer turn 0", "Retained assistant turn 0", "Retained assistant turn 11", "Latest question")
+				.doesNotContain("Unsent failure marker", "Other account marker");
+	}
+	@Test void completesReceiveTimeoutWithEmptyPageAndUnchangedCursor() throws Exception {
+		var waiting = mvc.perform(get("/api/v1/sms/receive").header("Authorization", "Bearer test-sms-api-token")
+				.param("accountId", "sim-1").param("after", "17").param("waitSeconds", "1"))
+				.andExpect(request().asyncStarted()).andReturn();
+		var context = (org.springframework.mock.web.MockAsyncContext) waiting.getRequest().getAsyncContext();
+		for (var listener : context.getListeners()) listener.onTimeout(new jakarta.servlet.AsyncEvent(context));
+		mvc.perform(asyncDispatch(waiting)).andExpect(status().isOk()).andExpect(jsonPath("$.messages.length()").value(0))
+				.andExpect(jsonPath("$.nextCursor").value(17));
+		verifyNoInteractions(ai);
 	}
 	@Test void deduplicatesAnActualGatewayRetransmissionAfterALostAck() throws Exception {
 		provider.simulator().loseNextInboundAck("sim-1");

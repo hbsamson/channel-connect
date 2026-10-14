@@ -5,8 +5,12 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +24,8 @@ import com.svi.channelconnect.whatsapp.exception.WhatsAppApiException;
 
 @Service
 public class CampaignService {
+	private static final Logger LOGGER = LoggerFactory.getLogger(CampaignService.class);
+	public static final int MAX_BATCH_SIZE = 100;
 	private static final List<String> ACTIVE = List.of("READY", "AWAITING_RESPONSE", "FOLLOW_UP_SCHEDULED", "CHANNEL_SWITCHED");
 	private final DealershipRepository store;
 	private final DemoConfiguration config;
@@ -39,15 +45,52 @@ public class CampaignService {
 		this.clock = clock;
 	}
 	public synchronized CampaignExecution start(String customer, String base, CampaignConfiguration campaign) {
+		return start(customer, base, campaign, null);
+	}
+	public synchronized CampaignExecution start(String customer, String base, CampaignConfiguration campaign, String openingScript) {
+		CampaignConfiguration selected = select(base, campaign, openingScript);
+		var execution = store.start(customer, selected, selected.baseChannel(), clock.millis());
+		advance(execution.id(), false);
+		return store.execution(customer, selected.id()).orElseThrow();
+	}
+	public synchronized List<CampaignStartResult> startBulk(List<String> customerIds, String base,
+			CampaignConfiguration campaign, String openingScript) {
+		if (customerIds == null || customerIds.isEmpty() || customerIds.size() > MAX_BATCH_SIZE
+				|| customerIds.stream().anyMatch(id -> id == null || !id.matches("[a-zA-Z0-9_-]{1,128}"))
+				|| new HashSet<>(customerIds).size() != customerIds.size()) {
+			throw new IllegalArgumentException("Provide a unique, bounded list of customer identifiers");
+		}
+		CampaignConfiguration selected = select(base, campaign, openingScript);
+		List<CampaignStartResult> results = new ArrayList<>();
+		for (String customerId : customerIds) {
+			try {
+				try { store.customer(customerId); }
+				catch (DemoRequestException exception) {
+					results.add(new CampaignStartResult(customerId, null, "CUSTOMER_NOT_FOUND"));
+					continue;
+				}
+				if (store.optedOut(customerId)) {
+					results.add(new CampaignStartResult(customerId, null, "OPTED_OUT"));
+					continue;
+				}
+				results.add(new CampaignStartResult(customerId, start(customerId, selected.baseChannel(), selected), null));
+			} catch (DemoRequestException exception) {
+				results.add(new CampaignStartResult(customerId, null, "CAMPAIGN_CONFLICT"));
+			} catch (DataAccessException exception) {
+				LOGGER.error("Campaign batch could not store recipient workflow for customerId={}", customerId);
+				results.add(new CampaignStartResult(customerId, null, "STORAGE_FAILURE"));
+			}
+		}
+		return List.copyOf(results);
+	}
+	private CampaignConfiguration select(String base, CampaignConfiguration campaign, String openingScript) {
 		CampaignConfiguration selected = campaign == null ? config.campaign() : campaign;
+		if (openingScript != null) selected = selected.withOpeningScript(openingScript);
 		config.validate(selected);
 		if (!selected.campaignEnabled()) throw new IllegalArgumentException("Campaign is disabled");
 		String initial = base == null ? selected.baseChannel() : base;
 		if (!selected.channels().contains(initial)) throw new IllegalArgumentException("Initial channel is not configured");
-		selected = selected.withBase(initial);
-		var execution = store.start(customer, selected, initial, clock.millis());
-		advance(execution.id(), false);
-		return store.execution(customer, selected.id()).orElseThrow();
+		return selected.withBase(initial);
 	}
 	@Scheduled(fixedDelayString = "${dealership.scheduler-delay-ms:1000}")
 	public void tick() {
@@ -95,6 +138,7 @@ public class CampaignService {
 			boolean switched = !channel.equals(execution.currentChannel());
 			String key = count == 0 ? (switched || !channel.equals(campaign.baseChannel()) ? "switch" : "opening") : "followup" + count;
 			if (count == 0 && campaign.scripts().containsKey("opening_" + channel.toLowerCase(java.util.Locale.ROOT)) && !switched) key = "opening_" + channel.toLowerCase(java.util.Locale.ROOT);
+			if (count == 0 && channel.equals("SMS") && channel.equals(campaign.baseChannel()) && campaign.openingScript() != null) key = campaign.openingScript();
 			final String scriptKey = key;
 			selected = store.identities(execution.customerId()).stream().filter(identity -> identity.channel().equals(channel)
 					&& channels.canInitiate(identity, campaign, scriptKey, now)).findFirst().orElse(null);

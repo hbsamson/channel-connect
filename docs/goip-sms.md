@@ -1,4 +1,4 @@
-# GoIP UDP SMS integration
+# GoIP SMS conversations and campaigns
 
 This is a simulator-tested local integration. The physical VoiceLink GoIPx8, firmware `GST1610-1.01-70-18`, has not been contacted or reconfigured. Its existing SMS server remains outside this application's control. Enabling a listener does not redirect gateway traffic to it.
 
@@ -18,7 +18,7 @@ flowchart LR
     Assistant --> Outbox
 ```
 
-Flyway V4 adds inbox, outbox, scoped conversation state, a transaction lock, and a persistent session sequence. Existing migrations and Meta HTTP contracts are preserved. This implementation supports **one application instance**, persistent H2 storage, and bounded queues. No new broker or database dependency is introduced. Local durability requires persistent writable storage; an in-memory database loses messages on restart.
+Flyway V4 adds inbox, outbox, scoped conversation state, a transaction lock, and a persistent session sequence. V5 adds an ordered inbox cursor for receive polling, and V6 persists the hosted API's initial receive baseline. Existing migrations and Meta HTTP contracts are preserved. This implementation supports **one application instance**, persistent H2 storage, and bounded queues. No new broker or database dependency is introduced. Local durability requires persistent writable storage; an in-memory database loses messages on restart.
 
 Inbound acceptance commits before sending `RECEIVE receiveId OK` with LF. AI runs later on a bounded worker. A lost acknowledgement causes the gateway to retransmit; `(configured account, receive ID)` and a content fingerprint prevent a second processing attempt. Conflicting reuse of an ID is rejected without a success acknowledgement. Processing failures retry up to the configured limit, then enter `DEAD_LETTER`. Protected operations can list and retry retained dead letters.
 
@@ -73,15 +73,52 @@ Hourly transmission attempts and minimum send intervals are persisted. Queue lim
 
 Content cleanup removes completed SMS content from the SMS tables and their dealership history copies. Completed inbox/outbox IDs expire after ID retention, allowing later ID reuse. **Unknown outbound idempotency tombstones remain indefinitely**, with content removed after content retention, so expiry cannot authorize an uncertain resend. Dead-letter content has the same configured retention; resolve or export failures before expiry. Protect the database volume and backups, and plan disk capacity for retained tombstones.
 
-## Use the tested GoIP8 HTTP sender
+## Use the hosted GoIP8 Postman API
+
+The operator's supplied collection uses two hosted PHP endpoints. `HTTP_API` mode follows its request format exactly:
+
+- Send: `POST <send-url>?line=<SIM>&message=<encoded text>&number=<encoded local mobile>`, with an empty body.
+- Receive: `GET <receive-url>?action=message&key=<encoded private key>`.
+
+Set `SMS_GOIP_API_SEND_URL` and `SMS_GOIP_API_RECEIVE_URL` to the collection's endpoint paths **without their query strings**, plus `SMS_GOIP_API_RECEIVE_KEY`, `SMS_GOIP_GATEWAY_ID` (matching incoming `goip_id`), and `SMS_API_TOKEN`, privately in the launching terminal or external configuration. Run:
+
+```powershell
+.\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-http-api'
+```
+
+The profile maps SIMs 1 and 2 to `goip-line-1` and `goip-line-2`. Add other accounts externally for additional lines. This mode uses HTTPS endpoint URLs and does not require direct gateway access, UDP reception, or a web-login password. Normalized outbound `+639...` numbers become `09...` for the collection's send contract; spaces, ampersands, newlines, and plus signs are URL-encoded. The operator confirmed this POST query request delivers SMS. Its observed response is an HTML management page without a correlated submission acknowledgement, so sends are recorded as `UNKNOWN / HTTP_API_SUBMISSION_UNCONFIRMED` after a successful HTTP response and are never automatically resent. Poll the customer's reply to continue; gateway HTTP success still does not confirm handset delivery.
+
+The hosted receive worker runs continuously using `sms.poll-interval` (`SMS_POLL_INTERVAL`, default `3s`) with one bounded remote request at a time. It accepts the supplied `{success,count,messages}` envelope, matching `goip_id` and `channel` to a configured account. It uses `recvid` for durable account-scoped deduplication and preserves `received_at`; it ignores `raw_packet`, gateway credentials, and other diagnostic fields. Only verified linked identities with consent and outbound permission enter this campaign conversation path. Bank/OTP alphanumeric senders, unconfigured routes, and unrelated customer numbers are skipped.
+
+On first activation, a database baseline excludes previously received messages so startup does not answer old inbox history. The default baseline uses second precision to match the supplied timestamps. The same baseline survives restarts, allowing messages since that activation to be imported when the API still exposes them. An optional external `sms.http-api.receive-start-at=<ISO instant>` sets the first baseline for an explicit backfill; changing it does not replace an existing baseline. The collection exposes a snapshot and no pagination/cursor contract, so messages absent from the snapshot cannot be recovered by this client. Keep polling frequency appropriate for its history window. HTTP failures, invalid envelopes, and queue exhaustion leave accepted receipts deduplicated for subsequent polls. Snapshots are limited to 1,000 messages and the response body is bounded by `SMS_GOIP_API_MAX_RESPONSE_BYTES` (default 1 MiB); larger snapshots are rejected. Private URLs, receive keys, raw packets, and customer content are excluded from operational logs.
+
+`/api/v1/sms/receive` polls the retained **local** inbox populated by this worker; its calls do not issue extra gateway requests. Both `HTTP` web-form mode and UDP modes remain available below.
+
+## Use the direct GoIP8 HTTP sender
 
 The separate `HTTP` mode uses the same Basic Auth web form request as [generic-sms-sender](https://github.com/glenannang/generic-sms-sender): `POST /default/en_US/sms_info.html`. It uses `sms.channels[0].source-address` for `goip.ipaddress`, `auth-id` for `goip.user`, `password` for `goip.pass`, `sim-channel` for `goip.line`, and `sms.session-timeout` for `goip.timeout-seconds`. The tested line is 1. Configure the gateway address and credentials privately through environment variables or an external Spring config file; do not commit them.
 
-The `sms-http` profile maps `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, and optional `SMS_GOIP_TIMEOUT` (default `60s`) into that configuration. Set `SMS_API_TOKEN` privately too, then run `./mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-http'`. The existing outbound API and durable outbox then apply. The HTTP provider marks an HTTP 200 as `GATEWAY_SENT`, matching the reference sender's success criterion. This confirms only that the gateway web form responded successfully; verify handset delivery separately. Any non-200 response, timeout, or uncertain transport result becomes `UNKNOWN` and is not retried automatically. HTTP mode does not provide UDP inbound SMS or GoIP registration status endpoints.
+The `sms-http` profile maps `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, and optional `SMS_GOIP_TIMEOUT` (default `60s`) into that configuration. Set `SMS_API_TOKEN` privately too, then run `./mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-http'`. The existing outbound API and durable outbox then apply. The HTTP provider marks an HTTP 200 as `GATEWAY_SENT`, matching the reference sender's success criterion. This confirms only that the gateway web form responded successfully; verify handset delivery separately. Any non-200 response, timeout, or uncertain transport result becomes `UNKNOWN` and is not retried automatically. HTTP reception is opt-in through the documented UDP protocol; a firmware HTTP inbox URL has not been supplied.
 
 Set those environment variables in the **same PowerShell terminal** that starts Maven. The `goipconfig.properties` file from the standalone sender is not loaded by this application, and `.env` is not loaded automatically. A missing channel value now reports its field name, such as `Invalid SMS channel auth-id`, without printing credentials.
 
 For line 2, start with `local,demo,sms-http-two-lines` instead of `sms-http`. This profile configures `goip-line-1` and `goip-line-2` on one gateway using the same HTTP login. The profile makes no claim that line 2 has been verified on the physical device; test its routing with an approved handset.
+
+For two-way HTTP-mode conversations, supply an external Spring configuration with the following properties, replacing placeholders privately:
+
+```properties
+sms.http-inbound.enabled=true
+sms.bind-address=<listener private IP>
+sms.port=<nonzero UDP port>
+sms.http-inbound.channels[0].account-id=goip-line-1
+sms.http-inbound.channels[0].auth-id=<line 1 SMS-server UDP ID>
+sms.http-inbound.channels[0].password=<line 1 SMS-server UDP password>
+sms.http-inbound.channels[1].account-id=goip-line-2
+sms.http-inbound.channels[1].auth-id=<line 2 SMS-server UDP ID>
+sms.http-inbound.channels[1].password=<line 2 SMS-server UDP password>
+```
+
+Use only the first entry for a one-line setup. `SMS_GOIP_RECEIVE_ENABLED=true`, `SMS_UDP_BIND_ADDRESS`, and `SMS_UDP_PORT` can supply the listener settings; channel credentials still belong in external configuration. UDP IDs must distinguish the SIMs and are independent of the shared HTTP web login. The gateway must be configured to register and deliver incoming SMS to this application's listener. Starting the application does not change the gateway's existing SMS-server destination. Incoming replies are persisted and answered through the HTTP account for the same SIM. HTTP-mode UDP channel-status/query and simulator administration routes remain unavailable.
 
 ## Run the loopback simulator
 
@@ -104,7 +141,7 @@ Supply additional mock channel entries through external configuration/`SPRING_AP
 
 Import [the local Postman collection](postman/goip-sms-local.postman_collection.json). Set `smsApiToken`, `adminUsername`, and `adminPassword` privately. Its base URL is loopback. Existing WhatsApp routes are unchanged.
 
-Submit `POST /api/v1/sms/messages`, using `Authorization: Bearer <SMS_API_TOKEN>`, `Idempotency-Key: <stable request key>`, and JSON:
+Submit `POST /api/v1/sms/send` (or the compatible `/api/v1/sms/messages`), using `Authorization: Bearer <SMS_API_TOKEN>`, `Idempotency-Key: <stable request key>`, and JSON:
 
 ```json
 {"accountId":"mock-sim-1","recipient":"+639000000001","content":"Local protocol test"}
@@ -117,6 +154,44 @@ The response is `202`, with a `Location` status URL:
 ```
 
 `GET /api/v1/sms/messages/{messageId}` requires the same bearer credential and returns message status, a safe `errorCode` when present, and `handsetDelivery: UNCONFIRMED`. Reusing a key with identical normalized inputs returns the original message and `replay: true`; changed inputs return `409`. Validation returns `400`, unknown accounts or revoked customer authorization return `403`, queue exhaustion returns `503`, and request bodies larger than 16 KiB return `413`. The SMS API accepts any valid Philippine mobile number; there is no SMS recipient allowlist. Keep the bearer token private because it can authorize sends to any such number.
+
+`content` is the final customer-facing text supplied by a caller, including an already produced LLM reply. `/send` does not call the LLM. Do not send the interpreter's internal intent JSON as SMS content. The automatic conversation worker already generates and enqueues one reply for each inbound receipt; manually submitting the same reply with a different key creates an additional outbound SMS.
+
+Poll `GET /api/v1/sms/receive?accountId=goip-line-1&after=0&waitSeconds=25` with the same bearer token. Optional `sender` filters one normalized customer; `limit` is 1–100 (default 100). `waitSeconds` is 0–30 (default 25). Empty polls wait asynchronously, with at most 100 concurrent waiting requests, and return `200` with an unchanged cursor at timeout. A response looks like:
+
+```json
+{
+  "messages": [{"cursor": 12, "messageId": "<inbox UUID>", "receiveId": 87,
+    "sender": "+639000000001", "content": "Friday at 9am", "receivedAt": 1791939600000,
+    "status": "RECEIVED"}],
+  "nextCursor": 12
+}
+```
+
+Repeat the request with `after=nextCursor` to keep waiting for new messages. Save the cursor after processing a page and keep the same account/sender filters. Polling is read-only: it does not claim receipts, invoke AI, or delete messages. The automatic worker may advance the reported processing status independently. Receipts remain replayable while retained; retained content and IDs follow the cleanup settings above. A newly accepted receipt may appear before its AI reply is queued.
+
+## Appointment assistant and mass outreach
+
+Import customer profiles through `POST /api/admin/demo/customers/import`, then link each verified SMS identity through `POST /api/admin/demo/customers/{customerId}/identities`. For enabled GoIP, use its configured account (for example `goip-line-1`) and a normalized Philippine number as `externalId`, with verified ownership, consent, and outbound permission. These admin routes require HTTP Basic authentication.
+
+```json
+{"channel":"SMS","accountId":"goip-line-1","externalId":"+639000000001",
+ "verified":true,"consent":true,"outboundAllowed":true}
+```
+
+Start canned outreach to a list using `POST /api/admin/demo/campaigns/bulk`:
+
+```json
+{"customerIds":["demo-renewal","demo-booking"],"baseChannel":"SMS","openingScript":"script3"}
+```
+
+The request accepts up to 100 unique customer IDs; send larger lists in batches. `openingScript` selects `script1` or `script3` from the campaign manager's configured `scripts` map and is also supported on `/api/admin/demo/campaigns/start`. An optional `configuration` supplies a complete campaign snapshot. The bundled scripts are sample openings; replace them with approved campaign wording and keep rendered SMS within the configured length limit. Omitting selection preserves the existing opening. Initial campaign sending does not call the LLM. Repeating a start for the same campaign/customer reuses the execution and selected script. Results are per customer: `execution` contains the durable campaign state, or `errorCode` explains an individual rejection. Queueing is separate from gateway acceptance and handset delivery. Existing SIM sending intervals, hourly limits, consent checks, opt-out, and suppression after a reply still apply.
+
+After a customer responds, the assistant receives every retained processed inbound and transmitted outbound turn for that account/participant, including the opening; the previous 20-message truncation is removed. Failed and unsent outbound messages are excluded, and uncertain transmissions carry their delivery status. Other SIM/customer conversations remain isolated. The prompt also includes verified customer/vehicle facts, active campaign, workflow, current appointment, and available slots. Retention cleanup still bounds how far history can reach; model/provider input limits still apply.
+
+The supplied TMBG material is implemented as configurable deterministic facts and intent branches in `dealership/catalog.json` and the assistant prompt: PMS inclusions, insurance support, LTO concierge, bundle benefits, dealer value, price objections, waiting time, essential-only estimates, broker comparison, and DIY registration. The LLM returns a structured intent; application code chooses approved wording and commits booking decisions. Rates, warranty outcomes, resale premiums, guaranteed turnaround, and legal penalties are not invented. SMS uses concise approved variants within the single-segment default; longer catalog answers remain available on the other channels.
+
+Appointments require a verified linked customer, an eligible configured service, and an available capacity-controlled slot. Unavailable dates trigger another-date prompts. Bundled slots and profiles are fictional, and booking records do not reserve a real dealership bay. CRM context currently comes from the existing profile import/link flow; Redshift ingestion/writeback and a live dealership scheduling adapter are not implemented. Configure actual catalog facts, customer offerings, and slots before a live pilot.
 
 HTTP Basic admin authentication protects:
 

@@ -28,12 +28,12 @@ import com.svi.channelconnect.sms.simulator.GoipGatewaySimulator;
 
 @Component
 @ConditionalOnProperty(name = "sms.enabled", havingValue = "true")
-@ConditionalOnExpression("'${sms.mode:MOCK}' != 'HTTP'")
+@ConditionalOnExpression("'${sms.mode:MOCK}' != 'HTTP' && '${sms.mode:MOCK}' != 'HTTP_API'")
 public class GoipSmsProvider implements SmsProvider, AutoCloseable {
 	private final SmsProperties properties;
 	private final SmsMessageRepository store;
 	private final GoipRegistrationService registrations;
-	private final GoipInboundHandler inbound;
+	private final GoipInboundPacketHandler inbound;
 	private final MeterRegistry metrics;
 	private final GoipPacketCodec codec = new GoipPacketCodec();
 	private final Map<Long, Query> queries = new ConcurrentHashMap<>();
@@ -48,7 +48,8 @@ public class GoipSmsProvider implements SmsProvider, AutoCloseable {
 			throw new IllegalArgumentException("Mock GoIP requires local or test profile");
 		}
 		registrations = new GoipRegistrationService(properties, clock);
-		inbound = new GoipInboundHandler(properties, store, registrations, metrics);
+		inbound = new GoipInboundPacketHandler(registrations,
+				new GoipInboundHandler(properties, store, registrations, metrics), metrics);
 		metrics.gauge("sms.goip.sessions", this, p -> p.sessions == null ? 0 : p.sessions.activeSessions());
 		metrics.gauge("sms.goip.available.channels", this, p -> p.statuses().stream().filter(GoipRegistrationService.Status::available).count());
 	}
@@ -68,17 +69,7 @@ public class GoipSmsProvider implements SmsProvider, AutoCloseable {
 		GoipPacket packet = codec.decode(bytes);
 		metrics.counter("sms.goip.packets", "result", "received").increment();
 		try {
-			if (packet.type() == GoipPacket.Type.REGISTRATION || packet.type() == GoipPacket.Type.RECEIVE) {
-				var channel = registrations.authenticate(packet, source).orElseThrow(() -> new IllegalArgumentException("GoIP authentication rejected"));
-				if (packet.type() == GoipPacket.Type.RECEIVE) { inbound.receive(packet, channel, source, transport); return; }
-				if (!List.of("LOGIN", "LOGOUT").contains(packet.fields().get("gsm_status"))
-						|| !packet.fields().getOrDefault("signal", "").matches("[0-9]{1,3}") || !packet.fields().containsKey("num")) {
-					throw new IllegalArgumentException("Invalid GoIP registration");
-				}
-				transport.send(codec.registrationAck(packet.id()), source);
-				registrations.registered(channel, packet, source);
-				metrics.counter("sms.goip.registrations", "result", "acknowledged").increment(); return;
-			}
+			if (inbound.receive(packet, source, transport)) return;
 			Query query = queries.get(packet.id());
 			if (query != null && query.registration.endpoint().equals(source)
 					&& registrations.available(query.registration.accountId()).map(r -> r.generation() == query.registration.generation()).orElse(false)) {

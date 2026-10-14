@@ -32,9 +32,27 @@ public class DemoConfiguration {
 		campaign = read(properties.campaign(), CampaignConfiguration.class);
 		validate(campaign);
 		prompt = text(properties.prompt());
+		if (catalog.cannedAnswers() != null) {
+			for (var answer : catalog.cannedAnswers().values()) {
+				if (answer == null || answer.english() == null || answer.english().isBlank() || answer.english().length() > 2048
+						|| answer.taglish() != null && (answer.taglish().isBlank() || answer.taglish().length() > 2048)) {
+					throw new IllegalArgumentException("Invalid approved canned answer");
+				}
+				for (String compact : new String[] {answer.smsEnglish(), answer.smsTaglish()}) {
+					if (compact != null && (compact.isBlank() || compact.length() > 95)) {
+						throw new IllegalArgumentException("Approved SMS answers must contain at most 95 characters");
+					}
+				}
+			}
+		}
 		for (Slot slot : catalog.slots()) {
 			OffsetDateTime.parse(slot.startsAt());
 			if (slot.capacity() < 1) throw new IllegalArgumentException("Slot capacity must be positive");
+		}
+		for (var service : catalog.services().values()) {
+			if (service.smsInclusions() != null && (service.smsInclusions().isBlank() || service.smsInclusions().length() > 95)) {
+				throw new IllegalArgumentException("Approved SMS inclusions must contain at most 95 characters");
+			}
 		}
 	}
 
@@ -56,6 +74,8 @@ public class DemoConfiguration {
 				|| config.retryIntervalSeconds() < 1 || config.retryIntervalSeconds() > 2592000
 				|| config.cooldownSeconds() < 0 || config.cooldownSeconds() > 2592000
 				|| !config.stopOnResponse() || config.serviceInclusions().isEmpty()
+				|| config.fallbackChannels().stream().anyMatch(channel -> channel == null)
+				|| config.channelPriority().stream().anyMatch(channel -> channel == null)
 				|| !channels.containsAll(config.channels()) || config.channelPriority() == null
 				|| !channels.containsAll(config.channelPriority())) {
 			throw new IllegalArgumentException("Invalid demo campaign configuration");
@@ -70,6 +90,11 @@ public class DemoConfiguration {
 			if (config.scripts().get(key) == null || config.scripts().get(key).isBlank() || config.scripts().get(key).length() > 4096) {
 				throw new IllegalArgumentException("Missing campaign script: " + key);
 			}
+		}
+		if (config.openingScript() != null && (!Set.of("script1", "script3").contains(config.openingScript())
+				|| config.scripts().get(config.openingScript()) == null || config.scripts().get(config.openingScript()).isBlank()
+				|| config.scripts().get(config.openingScript()).length() > 4096)) {
+			throw new IllegalArgumentException("Invalid approved SMS opening script");
 		}
 		if (config.whatsAppTemplates() != null) for (var template : config.whatsAppTemplates().values()) {
 			if (template == null || template.name() == null || !template.name().matches("[a-z0-9_]{1,512}")
@@ -94,7 +119,8 @@ public class DemoConfiguration {
 	}
 
 	public record Catalog(String disclaimer, String hours, String location, String privacyContact,
-			Map<String, Service> services, List<Slot> slots) { }
-	public record Service(String name, String price, List<String> inclusions) { }
+			Map<String, Service> services, List<Slot> slots, Map<String, CannedAnswer> cannedAnswers) { }
+	public record CannedAnswer(String english, String taglish, String smsEnglish, String smsTaglish) { }
+	public record Service(String name, String price, List<String> inclusions, String smsInclusions) { }
 	public record Slot(String id, String startsAt, int capacity) { }
 }

@@ -4,6 +4,7 @@
 	"serviceInclusions": [
 		"registration",
 		"ctpl-if-required",
+		"insurance",
 		"pms"
 	],
 	"baseChannel": "SMS",
@@ -25,6 +26,8 @@
 	"quietHoursStart": null,
 	"quietHoursEnd": null,
 	"scripts": {
+		"script1": "Hi {{first_name}}, {{dealer_name}} automated assistant. Need registration help? Reply with a visit date. STOP to opt out.",
+		"script3": "Hi {{first_name}}, {{dealer_name}} automated assistant. PMS, insurance or LTO assistance? Reply service + visit date. STOP to opt out.",
 		"opening": "Hello po, {{first_name}}! I'm the automated assistant of {{dealer_name}}. Your {{vehicle_model}} registration is due on {{renewal_due}}; would you like help booking a demo visit?",
 		"followup1": "Hello po, {{first_name}}! Following up on your registration renewal. Would you like assistance booking a demo visit?",
 		"followup2": "Hi po, {{first_name}}! This is our final reminder on this channel about your registration renewal. You can reply here whenever you'd like assistance.",

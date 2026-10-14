@@ -26,7 +26,8 @@ import com.svi.channelconnect.ai.dto.DealershipIntent;
 public class DealershipIntentInterpreter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DealershipIntentInterpreter.class);
 	private static final Set<String> INTENTS = Set.of("BOOK", "RESCHEDULE", "CANCEL", "CONFIRM", "DECLINE", "OPT_OUT",
-			"PRIVACY", "HANDOFF", "PRICE", "PACKAGES", "HOURS", "LOCATION", "DUE", "AVAILABILITY", "INQUIRY", "CONTINUE", "OUT_OF_SCOPE");
+			"PRIVACY", "HANDOFF", "PRICE", "PRICE_OBJECTION", "VALUE", "PMS_DETAILS", "INSURANCE_DETAILS", "INSURANCE_OBJECTION",
+			"LTO_DETAILS", "LTO_DIY", "WAIT_TIME", "ESSENTIAL_QUOTE", "BUNDLE", "PACKAGES", "HOURS", "LOCATION", "DUE", "AVAILABILITY", "INQUIRY", "CONTINUE", "OUT_OF_SCOPE");
 	private final AiClient client;
 	private final AiProperties properties;
 	private final ObjectMapper json;
@@ -49,7 +50,7 @@ public class DealershipIntentInterpreter {
 			if (!INTENTS.contains(intent.intent()) || !Set.of("en", "tl").contains(intent.language())) return fallback;
 			if (intent.date() != null) LocalDate.parse(intent.date());
 			if (intent.time() != null) LocalTime.parse(intent.time());
-			if (intent.serviceId() != null && !Set.of("registration", "pms", "2-in-1", "3-in-1", "custom").contains(intent.serviceId())) return fallback;
+			if (intent.serviceId() != null && !Set.of("registration", "pms", "insurance", "2-in-1", "3-in-1", "custom").contains(intent.serviceId())) return fallback;
 			return intent;
 		} catch (RuntimeException exception) {
 			LOGGER.warn("Dealership AI interpretation unavailable; using deterministic demo parser");
@@ -85,8 +86,9 @@ public class DealershipIntentInterpreter {
 				time = LocalTime.of(hour, minute).toString();
 			}
 		} catch (RuntimeException ignored) { date = null; time = null; }
-		String service = text.contains("3-in-1") ? "3-in-1" : text.contains("2-in-1") ? "2-in-1"
-				: text.contains("pms") || text.contains("maintenance") ? "pms" : text.contains("registration") || text.contains("rehistro") ? "registration" : null;
+		String service = text.contains("3-in-1") || text.contains("bundle") ? "3-in-1" : text.contains("2-in-1") ? "2-in-1"
+				: text.contains("pms") || text.contains("maintenance") ? "pms" : text.contains("registration") || text.contains("rehistro") || text.contains("lto") || text.contains("ltms") ? "registration"
+						: text.contains("insurance") || text.contains("insure") ? "insurance" : null;
 		String intent;
 		if (text.matches("(?s).*(\\bstop\\b|unsubscribe|opt.?out|do not contact|don't contact|no more messages|no more reminders|huwag.*(contact|message)|ayaw.*reminder).*")) intent = "OPT_OUT";
 		else if (isUnsafeTopic(text)) intent = "OUT_OF_SCOPE";
@@ -94,13 +96,25 @@ public class DealershipIntentInterpreter {
 		else if (text.matches("(?s).*(human|representative|agent|tao|kausap).*")) intent = "HANDOFF";
 		else if (text.matches("(?s).*(cancel|kansel).*")) intent = "CANCEL";
 		else if (text.matches("(?s).*(reschedul|move|change|instead|lipat|palit).*")) intent = "RESCHEDULE";
+		else if (text.matches("(?s).*(insurance|insure|broker).*") && text.matches("(?s).*(cheaper|expensive|mas mura|mahal|broker).*")) intent = "INSURANCE_OBJECTION";
+		else if (text.matches("(?s).*(ltms|do.?it.?myself|do.?it.?yourself|\\bdiy\\b|ako na.*(lto|rehistro)|online.*lto|lto.*online).*")) intent = "LTO_DIY";
+		else if (text.matches("(?s).*(essential.only|essentials|essential quote|upfront.*estimate|unwanted.*add|no.*add.ons|basic.*quote).*")) intent = "ESSENTIAL_QUOTE";
+		else if (text.matches("(?s).*(no time.*wait|walang oras|long.*wait|waiting time|turnaround|express maintenance|how long.*(pms|service|maintenance)|gaano katagal).*")) intent = "WAIT_TIME";
+		else if (text.matches("(?s).*(too expensive|expensive|cheaper|overpriced|mas mura|mahal|ibang (shop|store|talyer)|other (shop|store|garage)).*")) intent = "PRICE_OBJECTION";
+		else if (text.matches("(?s).*(why.*(toyota|manila bay|dealer|branch|choose|you)|bakit.*(toyota|manila bay|dealer|branch|kayo)|certified parts|genuine parts|trained (mechanic|technician)|benefits|advantage).*")) intent = "VALUE";
+		else if (text.matches("(?s).*(bundle|one (visit|stop)|isang (visit|punta|bisita)).*") && !text.matches("(?s).*(book|appointment|schedule).*")) intent = "BUNDLE";
 		else if (text.matches("(?s).*(price|cost|how much|magkano|discount).*")) intent = "PRICE";
-		else if (text.matches("(?s).*(package|inclusion|2-in-1|3-in-1|offerings).*")) intent = "PACKAGES";
 		else if (text.matches("(?s).*(hours|open|close|bukas.*oras).*")) intent = "HOURS";
 		else if (text.matches("(?s).*(location|address|where.*branch|saan).*")) intent = "LOCATION";
 		else if (text.matches("(?s).*(due|deadline|renewal status).*")) intent = "DUE";
 		else if (text.matches("(?s).*(available|availability|what.*schedule|anong.*schedule).*")) intent = "AVAILABILITY";
 		else if (text.matches("(?s).*(book|appointment|schedule|visit).*")) intent = "BOOK";
+		else if (service != null && (date != null || time != null)) intent = "BOOK";
+		else if (text.matches("(?s).*(insurance|insure|broker).*")) intent = "INSURANCE_DETAILS";
+		else if (text.matches("(?s).*(pms|preventive maintenance|oil filter|sump washer|safety check|minor.*maintenance|major.*maintenance).*")
+				&& !text.matches("(?s).*(package|2-in-1|3-in-1).*")) intent = "PMS_DETAILS";
+		else if (text.matches("(?s).*(package|inclusion|2-in-1|3-in-1|offerings).*")) intent = "PACKAGES";
+		else if (text.matches("(?s).*(lto|registration assistance|registration requirements|renewal requirements|inspection|document liaison).*")) intent = "LTO_DETAILS";
 		else if (text.matches("(?s).*(registration|renewal|insurance|ctpl|requirements|dealership|payment|service|vehicle|rehistro).*")) intent = "INQUIRY";
 		else if (text.matches("(yes|yes po|opo|oo|sige|okay|ok|confirm|yes please)[.! ]*")) intent = "CONFIRM";
 		else if (text.matches("(no|no thanks|no thank you|not interested|hindi)[.! ]*")) intent = "DECLINE";

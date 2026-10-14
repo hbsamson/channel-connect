@@ -18,7 +18,7 @@ import com.svi.channelconnect.sms.goip.GoipSmsProvider;
 @RestController
 @Profile({"local", "test"})
 @ConditionalOnProperty(name = "sms.enabled", havingValue = "true")
-@ConditionalOnExpression("'${sms.mode:MOCK}' != 'HTTP'")
+@ConditionalOnExpression("'${sms.mode:MOCK}' == 'MOCK' || '${sms.mode:MOCK}' == 'LIVE'")
 @RequestMapping("/api/admin/sms")
 public class SmsOperationsController {
 	private final GoipSmsProvider provider;

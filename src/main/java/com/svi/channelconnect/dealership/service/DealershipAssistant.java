@@ -52,7 +52,10 @@ public class DealershipAssistant {
 		context.put("history", history);
 		context.put("summary", summary);
 		context.put("catalog", config.catalog());
-		context.put("appointment", store.appointment(customerId).orElse(null));
+		context.put("goal", "Help the customer choose and book an available dealership service appointment, while respecting opt-out and requests for a person.");
+		context.put("identityVerified", verified);
+		context.put("availableSlots", store.slots(clock.millis()));
+		context.put("appointment", verified ? store.appointment(customerId).orElse(null) : null);
 		CampaignConfiguration campaign = store.activeCampaign(customerId).orElse(config.campaign());
 		context.put("campaign", campaign);
 		if (verified) {
@@ -60,8 +63,12 @@ public class DealershipAssistant {
 			known.put("firstName", customer.firstName());
 			known.put("vehicleModel", customer.vehicleModel());
 			known.put("renewalDue", customer.renewalDue());
+			known.put("registrationDue", customer.registrationDue());
+			known.put("insuranceDue", customer.insuranceDue());
 			known.put("renewalStatus", customer.renewalStatus());
 			known.put("ctplStatus", customer.ctplStatus());
+			known.put("serviceOfferings", customer.serviceOfferings());
+			known.put("dealerBranch", customer.dealerBranch());
 			context.put("customer", known);
 		}
 		return interpreter.interpret(customerId, message,
@@ -102,12 +109,25 @@ public class DealershipAssistant {
 		}
 		if (action.equals("HOURS")) return new Answer(config.catalog().hours(), state);
 		if (action.equals("LOCATION")) return new Answer(config.catalog().location(), state);
-		if (action.equals("DUE")) return new Answer(customer.renewalDue() == null
-				? local(language, "Your renewal date needs confirmation from the dealership po.", "Kailangan pong kumpirmahin sa dealership ang renewal date ninyo.")
-				: local(language, "Your registration renewal is due on " + customer.renewalDue() + " in this demo record po.", "Due po ang registration renewal ninyo sa " + customer.renewalDue() + " ayon sa demo record."), state);
+		if (action.equals("DUE")) {
+			boolean insurance = "insurance".equals(intent.serviceId());
+			String due = insurance ? customer.insuranceDue() : customer.registrationDue() == null ? customer.renewalDue() : customer.registrationDue();
+			String renewal = insurance ? "insurance renewal" : "registration renewal";
+			return new Answer(due == null
+					? local(language, "Your " + renewal + " date needs dealership confirmation po.", "Kailangan pong kumpirmahin ang " + renewal + " date ninyo.")
+					: local(language, "Your " + renewal + " is due on " + due + " in this demo record po.", "Due po ang " + renewal + " ninyo sa " + due + " ayon sa demo record."), state);
+		}
 		if (action.equals("PRICE")) {
 			var service = config.catalog().services().get(intent.serviceId() == null ? state.serviceId() : intent.serviceId());
 			return new Answer(service == null || service.price() == null ? "The price needs confirmation from a dealership representative po." : service.price(), state);
+		}
+		if (java.util.Set.of("VALUE", "PRICE_OBJECTION", "PMS_DETAILS", "INSURANCE_DETAILS", "INSURANCE_OBJECTION",
+				"LTO_DETAILS", "LTO_DIY", "WAIT_TIME", "ESSENTIAL_QUOTE", "BUNDLE").contains(action)) {
+			if (state.stage().equals("IDLE") && intent.serviceId() != null && customer.serviceOfferings() != null
+					&& customer.serviceOfferings().contains(intent.serviceId())) {
+				state = new Workflow(state.stage(), intent.serviceId(), state.date(), state.time(), language);
+			}
+			return cannedAnswer(customerId, verified, state, action, language);
 		}
 		if (action.equals("PACKAGES")) {
 			String id = intent.serviceId() == null ? "3-in-1" : intent.serviceId();
@@ -115,15 +135,34 @@ public class DealershipAssistant {
 			String reply = offering == null ? "The package inclusions need dealership confirmation po."
 					: offering.name() + ": " + String.join(", ", offering.inclusions()) + ".";
 			if (verified && id.equals("3-in-1")) reply += " Your demo record lists CTPL as " + (customer.ctplStatus() == null ? "unconfirmed" : customer.ctplStatus()) + " po.";
-			return new Answer(reply, state);
+			if (!verified) state = new Workflow("HANDOFF_CONFIRM", state.serviceId(), state.date(), state.time(), language);
+			else if (state.stage().equals("IDLE") && customer.serviceOfferings() != null && customer.serviceOfferings().contains(id)
+					&& store.appointment(customerId).isEmpty()) {
+				state = new Workflow(state.stage(), id, state.date(), state.time(), language);
+			}
+			ReplyQuestion question = appointmentQuestion(verified, store.appointment(customerId).isPresent(), state, language);
+			String compact = offering == null || offering.smsInclusions() == null ? null : offering.smsInclusions() + " " + question.smsText();
+			return new Answer(reply + " " + question.text(), state, compact);
 		}
 		if (action.equals("AVAILABILITY")) {
+			String selectedService = intent.serviceId() == null ? state.serviceId() : intent.serviceId();
+			if (verified && (!config.catalog().services().containsKey(selectedService) || customer.serviceOfferings() == null
+					|| !customer.serviceOfferings().contains(selectedService))) {
+				return new Answer("That service needs dealership confirmation po. Would you like a representative to help?",
+						new Workflow("HANDOFF_CONFIRM", state.serviceId(), state.date(), state.time(), language));
+			}
 			String requestedDate = intent.date();
 			var slots = store.slots(clock.millis()).stream().filter(s -> requestedDate == null || date(s.startsAt()).equals(requestedDate)).limit(3).toList();
 			String reply = slots.isEmpty() ? local(language, "No configured demo slots are available for that date po. What other date works?", "Walang available na demo slot sa petsang iyon po. Anong ibang petsa ang pwede?")
 					: local(language, "Available demo slots: ", "Available na demo slots: ") + slots.stream().map(s -> format(s.startsAt())).collect(java.util.stream.Collectors.joining("; ")) + ". "
 					+ local(language, "Which would you prefer po?", "Alin ang gusto ninyo po?");
-			return new Answer(reply, state);
+			Workflow next = verified && state.stage().equals("IDLE") && store.appointment(customerId).isEmpty()
+					? new Workflow("BOOK", selectedService, requestedDate, null, language) : state;
+			String compact = slots.isEmpty() ? local(language, "No configured demo slots for that date. Another date?", "Walang demo slot sa petsang iyon. Ibang petsa?")
+					: "Demo slots: " + slots.stream().limit(2).map(s -> date(s.startsAt()) + " " + time(s.startsAt()))
+							.collect(java.util.stream.Collectors.joining("; ")) + " Asia/Manila. "
+							+ local(language, "Choose date/time?", "Anong petsa/oras?");
+			return new Answer(reply, next, compact);
 		}
 		if (action.equals("DECLINE")) {
 			store.executionStatus(customerId, "COMPLETED");
@@ -140,10 +179,66 @@ public class DealershipAssistant {
 			return new Answer(scripts.render(campaign, "cancellation", language, values), new Workflow("IDLE", state.serviceId(), null, null, language));
 		}
 		if (!verified) return new Answer(scripts.render(campaign, "redirect", language, values), state);
-		if (action.equals("BOOK") || action.equals("RESCHEDULE") || action.equals("CONFIRM") || action.equals("CONTINUE") && !state.stage().equals("IDLE")) {
+		boolean dateSelection = action.equals("CONTINUE") && (intent.date() != null || intent.time() != null);
+		if (dateSelection && state.stage().equals("IDLE") && store.appointment(customerId).isPresent()) {
+			return new Answer(local(language,
+					"An appointment is already recorded. Please request a reschedule if you would like to change it po.",
+					"May naka-record nang appointment. Paki-request po ng reschedule kung gusto ninyong palitan ito."), state);
+		}
+		boolean canStartFromDate = dateSelection && config.catalog().services().containsKey(state.serviceId())
+				&& customer.serviceOfferings() != null && customer.serviceOfferings().contains(state.serviceId());
+		if (action.equals("BOOK") || action.equals("RESCHEDULE") || action.equals("CONFIRM")
+				|| action.equals("CONTINUE") && (!state.stage().equals("IDLE") || canStartFromDate)) {
 			return appointment(customerId, customer, state, intent, campaign);
 		}
 		return new Answer(scripts.render(campaign, "redirect", language, values), state);
+	}
+
+	private Answer cannedAnswer(String customerId, boolean verified, Workflow state, String action, String language) {
+		var approved = config.catalog().cannedAnswers() == null ? null : config.catalog().cannedAnswers().get(action);
+		if (approved == null) {
+			return new Answer(local(language,
+					"Those details need dealership confirmation po. Would you like a representative to explain the service and quote?",
+					"Kailangan pong kumpirmahin sa dealership ang detalye. Gusto po ba ninyong magpaliwanag ang representative ng service at quote?"),
+					new Workflow("HANDOFF_CONFIRM", state.serviceId(), state.date(), state.time(), language),
+					local(language, "Those details need advisor confirmation. Request a representative?", "Kailangan ng advisor confirmation. Mag-request ng representative?"));
+		}
+		String reply = "tl".equals(language) && approved.taglish() != null ? approved.taglish() : approved.english();
+		if (!verified) state = new Workflow("HANDOFF_CONFIRM", state.serviceId(), state.date(), state.time(), language);
+		ReplyQuestion question = appointmentQuestion(verified, store.appointment(customerId).isPresent(), state, language);
+		String compact = "tl".equals(language) && approved.smsTaglish() != null ? approved.smsTaglish() : approved.smsEnglish();
+		return new Answer(reply + " " + question.text(), state, compact == null ? null : compact + " " + question.smsText());
+	}
+
+	private ReplyQuestion appointmentQuestion(boolean verified, boolean booked, Workflow state, String language) {
+		if (!verified || state.stage().equals("HANDOFF_CONFIRM")) return new ReplyQuestion(
+				local(language, "Would you like a representative to help po?", "Gusto po ba ninyong tumulong ang representative?"),
+				local(language, "Ask a representative to help?", "Mag-request ng representative?"));
+		if (state.stage().equals("CANCEL_CONFIRM")) return new ReplyQuestion(
+				local(language, "Would you still like to cancel your demo appointment po?", "Gusto pa rin po ba ninyong i-cancel ang demo appointment?"),
+				local(language, "Cancel your demo appointment?", "I-cancel ang demo appointment?"));
+		if (state.stage().equals("BOOK") || state.stage().startsWith("RESCHEDULE")) {
+			if (state.date() == null) return new ReplyQuestion(
+					local(language, "What date would you prefer for your visit po?", "Anong petsa ang gusto ninyo para sa visit po?"),
+					local(language, "Preferred visit date?", "Anong petsa ng visit?"));
+			if (state.time() == null) return new ReplyQuestion(
+					local(language, "What time would you prefer on " + state.date() + " po?", "Anong oras ang gusto ninyo sa " + state.date() + " po?"),
+					local(language, "Preferred time on " + state.date() + "?", "Anong oras sa " + state.date() + "?"));
+			return new ReplyQuestion(
+					local(language, "What other date and time would work for you po?", "Anong ibang petsa at oras ang pwede sa inyo po?"),
+					local(language, "Another date and time?", "Ibang petsa at oras?"));
+		}
+		if (booked) return new ReplyQuestion(
+				local(language, "Would you like to check or change your appointment po?", "Gusto po ba ninyong tingnan o palitan ang appointment?"),
+				local(language, "Check or change your demo appointment?", "Tingnan o palitan ang demo appointment?"));
+		return new ReplyQuestion(
+				local(language, "Would you like to book a " + serviceName(state.serviceId()) + " visit po?", "Gusto po ba ninyong mag-book ng " + serviceName(state.serviceId()) + " visit?"),
+				local(language, "Book a " + serviceName(state.serviceId()) + " visit?", "Mag-book ng " + serviceName(state.serviceId()) + " visit?"));
+	}
+
+	/** Transport presentation remains grounded in the same approved answer and saved workflow. */
+	public String smsReply(Answer answer) {
+		return answer.smsText() == null ? answer.text() : answer.smsText();
 	}
 
 	private Answer appointment(String id, CustomerProfile customer, Workflow state, DealershipIntent intent, CampaignConfiguration campaign) {
@@ -172,7 +267,11 @@ public class DealershipAssistant {
 		if (slot.isEmpty()) return new Answer(local(intent.language(), "That demo slot is unavailable po. What other date and time would you prefer?", "Hindi available ang demo slot na iyon po. Anong ibang schedule ang gusto ninyo?"), next);
 		Appointment saved = store.book(id, service, slot.get().id(), reschedule, clock.millis());
 		String reply = scripts.render(campaign, reschedule ? "rescheduling" : "booking", intent.language(), scripts.values(customer, properties.name(), serviceName(saved.serviceId()), format(saved.startsAt())));
-		return new Answer(reply, new Workflow("IDLE", saved.serviceId(), date(saved.startsAt()), time(saved.startsAt()), intent.language()));
+		String compact = local(intent.language(), reschedule ? "Demo appointment moved: " : "Demo appointment recorded: ",
+				reschedule ? "Nailipat ang demo appointment: " : "Naitala ang demo appointment: ")
+				+ date(saved.startsAt()) + " " + time(saved.startsAt()) + " Asia/Manila. "
+				+ local(intent.language(), "This is not a real reservation.", "Wala pang tunay na reservation.");
+		return new Answer(reply, new Workflow("IDLE", saved.serviceId(), date(saved.startsAt()), time(saved.startsAt()), intent.language()), compact);
 	}
 	private String serviceName(String id) {
 		var service = config.catalog().services().get(id);
@@ -182,5 +281,8 @@ public class DealershipAssistant {
 	private String date(long at) { return Instant.ofEpochMilli(at).atZone(MANILA).toLocalDate().toString(); }
 	private String time(long at) { return Instant.ofEpochMilli(at).atZone(MANILA).toLocalTime().toString(); }
 	private String format(long at) { return DateTimeFormatter.ofPattern("EEE, MMM d, yyyy h:mm a 'Asia/Manila'").format(Instant.ofEpochMilli(at).atZone(MANILA)); }
-	public record Answer(String text, Workflow workflow) { }
+	public record Answer(String text, Workflow workflow, String smsText) {
+		public Answer(String text, Workflow workflow) { this(text, workflow, null); }
+	}
+	private record ReplyQuestion(String text, String smsText) { }
 }

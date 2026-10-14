@@ -78,7 +78,11 @@ public class DemoController {
 	}
 	@PostMapping("/campaigns/start")
 	public CampaignExecution start(@Valid @RequestBody StartCampaign request) {
-		return campaigns.start(request.customerId(), request.baseChannel(), request.configuration());
+		return campaigns.start(request.customerId(), request.baseChannel(), request.configuration(), request.openingScript());
+	}
+	@PostMapping("/campaigns/bulk")
+	public List<CampaignStartResult> bulk(@Valid @RequestBody BulkCampaign request) {
+		return campaigns.startBulk(request.customerIds(), request.baseChannel(), request.configuration(), request.openingScript());
 	}
 	@GetMapping("/campaigns")
 	public List<CampaignExecution> executions() { return store.executions(); }
@@ -99,7 +103,12 @@ public class DemoController {
 						"TELEGRAM", "SIMULATED", "MESSENGER", "REAL_ADAPTER_REQUIRES_LIVE_VERIFICATION", "WHATSAPP", "REAL_ADAPTER_REQUIRES_LIVE_VERIFICATION"));
 	}
 	public record StartCampaign(@NotBlank @Size(max = 128) String customerId,
-			@Pattern(regexp = "SMS|TELEGRAM|MESSENGER|WHATSAPP") String baseChannel, CampaignConfiguration configuration) { }
+			@Pattern(regexp = "SMS|TELEGRAM|MESSENGER|WHATSAPP") String baseChannel, CampaignConfiguration configuration,
+			@Pattern(regexp = "script1|script3") String openingScript) { }
+	public record BulkCampaign(@jakarta.validation.constraints.NotEmpty @Size(max = CampaignService.MAX_BATCH_SIZE)
+			List<@NotBlank @Pattern(regexp = "[a-zA-Z0-9_-]{1,128}") String> customerIds,
+			@Pattern(regexp = "SMS|TELEGRAM|MESSENGER|WHATSAPP") String baseChannel, CampaignConfiguration configuration,
+			@Pattern(regexp = "script1|script3") String openingScript) { }
 	public record Advance(@Size(max = 128) String executionId, boolean force) { }
 	public record LinkIdentity(@NotBlank @Pattern(regexp = "SMS|TELEGRAM|MESSENGER|WHATSAPP") String channel,
 			@NotBlank @Size(max = 128) String accountId, @NotBlank @Size(max = 512) String externalId,

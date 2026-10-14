@@ -4,6 +4,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,6 +33,13 @@ public class SmsMessageRepository {
 
 	@Transactional
 	public boolean accept(String account, long receiveId, String sender, String content) {
+		return acceptReceipt(account, receiveId, sender, content, clock.millis());
+	}
+	@Transactional
+	public boolean acceptRemote(String account, long receiveId, String sender, String content, long receivedAt) {
+		return acceptReceipt(account, receiveId, sender, content, receivedAt);
+	}
+	private boolean acceptReceipt(String account, long receiveId, String sender, String content, long receivedAt) {
 		lock();
 		String fingerprint = SmsValidation.fingerprint(sender, content);
 		var old = db.sql("SELECT fingerprint FROM sms_inbox WHERE account_id = ? AND receive_id = ?")
@@ -42,8 +50,16 @@ public class SmsMessageRepository {
 		}
 		if (inboundBacklog() >= properties.queueCapacity()) throw new SmsException(SmsException.Reason.CAPACITY);
 		db.sql("INSERT INTO sms_inbox(id, account_id, receive_id, sender, content, fingerprint, received_at, status, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?)")
-				.params(UUID.randomUUID().toString(), account, receiveId, sender, content, fingerprint, clock.millis(), clock.millis()).update();
+				.params(UUID.randomUUID().toString(), account, receiveId, sender, content, fingerprint, receivedAt, clock.millis()).update();
 		return true;
+	}
+	@Transactional
+	public long receiveBaseline(String sourceId, long initialReceivedAt) {
+		lock();
+		var previous = db.sql("SELECT received_from FROM sms_poll_baselines WHERE source_id = ?").param(sourceId).query(Long.class).optional();
+		if (previous.isPresent()) return previous.get();
+		db.sql("INSERT INTO sms_poll_baselines(source_id, received_from) VALUES (?, ?)").params(sourceId, initialReceivedAt).update();
+		return initialReceivedAt;
 	}
 	@Transactional
 	public SmsSubmission enqueue(String requestKey, String account, String recipient, String content, String dealerMessageId) {
@@ -74,7 +90,7 @@ public class SmsMessageRepository {
 				.query(this::outboundRow).list();
 	}
 	public List<SmsInbound> pendingInbound() {
-		return db.sql("SELECT * FROM sms_inbox WHERE status = 'RECEIVED' AND next_attempt_at <= ? ORDER BY received_at, id LIMIT 1")
+		return db.sql("SELECT * FROM sms_inbox WHERE status = 'RECEIVED' AND next_attempt_at <= ? ORDER BY received_at, inbox_sequence LIMIT 1")
 				.param(clock.millis()).query(this::inboundRow).list();
 	}
 	public int inboundBacklog() { return db.sql("SELECT COUNT(*) FROM sms_inbox WHERE status IN ('RECEIVED','PROCESSING')").query(Integer.class).single(); }
@@ -141,6 +157,18 @@ public class SmsMessageRepository {
 		return db.sql("UPDATE sms_inbox SET status = 'PROCESSING', attempts = attempts + 1 WHERE id = ? AND status = 'RECEIVED'").param(id).update() == 1;
 	}
 	public SmsInbound inbound(String id) { return db.sql("SELECT * FROM sms_inbox WHERE id = ?").param(id).query(this::inboundRow).single(); }
+	public List<com.svi.channelconnect.sms.dto.response.SmsReceiveResponse.Message> received(String account, String sender, long after, int limit) {
+		return db.sql("SELECT inbox_sequence, id, receive_id, sender, content, received_at, status FROM sms_inbox WHERE account_id = :account AND inbox_sequence > :after AND (:sender IS NULL OR sender = :sender) AND content IS NOT NULL ORDER BY inbox_sequence LIMIT :limit")
+				.param("account", account).param("sender", sender, java.sql.Types.VARCHAR).param("after", after).param("limit", limit)
+				.query((rs, row) -> new com.svi.channelconnect.sms.dto.response.SmsReceiveResponse.Message(rs.getLong(1),
+						rs.getString(2), rs.getLong(3), rs.getString(4), rs.getString(5), rs.getLong(6), rs.getString(7))).list();
+	}
+	public List<Map<String, Object>> conversationHistory(String account, String participant, String currentInboundId) {
+		// Retain every available turn on this SIM/participant route. Unsent or failed messages were not told to the customer.
+		return db.sql("SELECT direction, content, delivery_status FROM (SELECT 'INBOUND' AS direction, content, status AS delivery_status, received_at AS occurred_at, 0 AS turn_order, inbox_sequence AS sequence FROM sms_inbox WHERE account_id = ? AND sender = ? AND content IS NOT NULL AND (status = 'PROCESSED' OR id = ?) UNION ALL SELECT 'OUTBOUND', content, status, COALESCE(transmitted_at, created_at), 1, session_id FROM sms_outbox WHERE account_id = ? AND recipient = ? AND content IS NOT NULL AND status IN ('GATEWAY_SENT','TRANSMITTING','UNKNOWN')) ORDER BY occurred_at, turn_order, sequence")
+				.params(account, participant, currentInboundId, account, participant)
+				.query((rs, row) -> Map.<String, Object>of("direction", rs.getString(1), "content", rs.getString(2), "deliveryStatus", rs.getString(3))).list();
+	}
 	public void customer(String id, String customer) { db.sql("UPDATE sms_inbox SET customer_id = ? WHERE id = ?").params(customer, id).update(); }
 	public void completeInbound(String id) { db.sql("UPDATE sms_inbox SET status = 'PROCESSED' WHERE id = ? AND status = 'PROCESSING'").param(id).update(); }
 	public void retryInbound(String id) {

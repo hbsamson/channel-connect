@@ -53,7 +53,7 @@ public class SmsConversationProcessor {
 				SmsInbound incoming = messages.inbound(id);
 				if (!incoming.status().equals("PROCESSING")) return;
 				var answer = assistant.apply(prepared.customerId(), prepared.verified(), prepared.workflow(), intent);
-				String reply = answer.text();
+				String reply = assistant.smsReply(answer);
 				try { SmsValidation.content(reply, properties); }
 				catch (SmsException tooLong) {
 					reply = LENGTH_FALLBACK; SmsValidation.content(reply, properties);
@@ -85,9 +85,7 @@ public class SmsConversationProcessor {
 			db.sql("INSERT INTO sms_conversations(account_id, participant, workflow, summary, last_activity_at) VALUES (?, ?, ?, '', ?)")
 					.params(incoming.accountId(), incoming.sender(), customers.encode(Workflow.initial()), clock.millis()).update();
 		}
-		List<Map<String, Object>> history = db.sql("SELECT direction, content FROM (SELECT 'INBOUND' AS direction, content, received_at AS occurred_at FROM sms_inbox WHERE account_id = ? AND sender = ? AND content IS NOT NULL AND (status = 'PROCESSED' OR id = ?) UNION ALL SELECT 'OUTBOUND', content, created_at FROM sms_outbox WHERE account_id = ? AND recipient = ? AND content IS NOT NULL) ORDER BY occurred_at DESC LIMIT 20")
-				.params(incoming.accountId(), incoming.sender(), incoming.id(), incoming.accountId(), incoming.sender())
-				.query((rs, row) -> Map.<String, Object>of("direction", rs.getString(1), "content", rs.getString(2))).list().reversed();
+		List<Map<String, Object>> history = messages.conversationHistory(incoming.accountId(), incoming.sender(), incoming.id());
 		State scoped = state.orElse(new State(Workflow.initial(), ""));
 		return new Prepared(incoming, identity.customerId(), identity.verified(), scoped.workflow(), scoped.summary(), history);
 	}

@@ -5,9 +5,11 @@ import java.time.Instant;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice(basePackages = "com.svi.channelconnect.sms.controller")
 public class SmsExceptionHandler {
@@ -18,7 +20,8 @@ public class SmsExceptionHandler {
 			case CONFLICT -> 409; case CAPACITY -> 503; case NOT_FOUND -> 404; case EXPIRED -> 422;
 		});
 	}
-	@ExceptionHandler({IllegalArgumentException.class, MethodArgumentNotValidException.class, MissingRequestHeaderException.class, HttpMessageNotReadableException.class})
+	@ExceptionHandler({IllegalArgumentException.class, MethodArgumentNotValidException.class, MissingRequestHeaderException.class,
+			MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class, HttpMessageNotReadableException.class})
 	ResponseEntity<Error> invalid() { return error(400); }
 	@ExceptionHandler({java.io.IOException.class, InterruptedException.class})
 	ResponseEntity<Error> unavailable(Exception exception) {
