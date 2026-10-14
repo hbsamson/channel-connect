@@ -1,0 +1,55 @@
+{
+	"id": "registration-renewal",
+	"offeringType": "3-in-1",
+	"serviceInclusions": [
+		"registration",
+		"ctpl-if-required",
+		"pms"
+	],
+	"baseChannel": "SMS",
+	"fallbackChannels": [
+		"TELEGRAM",
+		"MESSENGER",
+		"WHATSAPP"
+	],
+	"channelPriority": [
+		"TELEGRAM",
+		"MESSENGER",
+		"WHATSAPP"
+	],
+	"maxAttemptsPerChannel": 3,
+	"retryIntervalSeconds": 30,
+	"cooldownSeconds": 30,
+	"campaignEnabled": true,
+	"stopOnResponse": true,
+	"quietHoursStart": null,
+	"quietHoursEnd": null,
+	"scripts": {
+		"opening": "Hello po, {{first_name}}! I'm the automated assistant of {{dealer_name}}. Your {{vehicle_model}} registration is due on {{renewal_due}}; would you like help booking a demo visit?",
+		"followup1": "Hello po, {{first_name}}! Following up on your registration renewal. Would you like assistance booking a demo visit?",
+		"followup2": "Hi po, {{first_name}}! This is our final reminder on this channel about your registration renewal. You can reply here whenever you'd like assistance.",
+		"switch": "Hello po, {{first_name}}! Continuing our registration reminder here after our earlier messages. Would you like help scheduling a demo visit?",
+		"positive": "Certainly po. What date would you prefer for your demo visit?",
+		"booking": "Your demo {{service_offering}} appointment is recorded for {{appointment_time}} po. This does not reserve a real dealership appointment.",
+		"rescheduling": "Your demo appointment has been moved to {{appointment_time}} po.",
+		"cancellation": "Your demo appointment has been cancelled po.",
+		"privacy": "This automated reminder uses the customer record configured for this demo po. I can record a request for a representative, or stop future reminders.",
+		"handoff": "I've recorded your request for a dealership representative po. A person has not been notified automatically.",
+		"closing": "Thank you po! You can message here for help with dealership services.",
+		"redirect": "I can help with registration renewals, dealership services, and appointments po. What would you like to check?",
+		"optout": "I've stopped campaign reminders across your linked channels po."
+	},
+	"taglishScripts": {
+		"opening": "Hello po, {{first_name}}! Automated assistant ako ng {{dealer_name}}. Due ang registration ng {{vehicle_model}} ninyo sa {{renewal_due}}; gusto po ba ninyong mag-book ng demo visit?",
+		"positive": "Sige po. Anong petsa ang gusto ninyo para sa demo visit?",
+		"booking": "Naitala na ang demo {{service_offering}} appointment ninyo sa {{appointment_time}} po. Wala pa itong reservation sa totoong dealership.",
+		"rescheduling": "Nailipat na ang demo appointment ninyo sa {{appointment_time}} po.",
+		"cancellation": "Cancelled na ang demo appointment ninyo po.",
+		"privacy": "Galing sa customer record na naka-configure para sa demo ang reminder na ito po. Maaari tayong mag-request ng representative o itigil ang reminders.",
+		"handoff": "Naitala ko na ang request ninyo para sa representative po. Wala pang taong awtomatikong na-notify.",
+		"redirect": "Makakatulong ako sa registration renewal, dealership services, at appointments po. Ano ang gusto ninyong malaman?",
+		"optout": "Itinigil ko na ang campaign reminders sa lahat ng linked channels ninyo po.",
+		"closing": "Salamat po! Message lang para sa tulong sa dealership services."
+	},
+	"whatsAppTemplates": {}
+}

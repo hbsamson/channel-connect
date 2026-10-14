@@ -24,6 +24,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/webhooks/messenger", "/webhooks/whatsapp", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/messenger", "/webhooks/whatsapp", "/api/v1/whatsapp/messages").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/admin/conversations/*").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/demo/**").hasRole("ADMIN")
                         .anyRequest().denyAll())
                 .httpBasic(Customizer.withDefaults())
                 .build();

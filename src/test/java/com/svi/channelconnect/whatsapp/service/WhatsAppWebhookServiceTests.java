@@ -36,7 +36,8 @@ class WhatsAppWebhookServiceTests {
 				new ObjectMapper(),
 				new WhatsAppMessageMapper(TestProperties.whatsApp()),
 				dispatcher,
-				new SimpleMeterRegistry());
+				new SimpleMeterRegistry(),
+				mock(com.svi.channelconnect.dealership.persistence.DealershipRepository.class), TestProperties.whatsApp());
 	}
 
 	@Test

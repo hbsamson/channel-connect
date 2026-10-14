@@ -7,7 +7,9 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.util.StringUtils;
 
@@ -20,7 +22,9 @@ public record AiProperties(
 		@NotNull URI baseUrl,
 		@NotNull Duration timeout,
 		@Min(0) @Max(3) int maxRetries,
-		@Min(1) @Max(4096) int maxResponseCharacters
+		@Min(1) @Max(4096) int maxResponseCharacters,
+		@DefaultValue("") @Pattern(regexp = "|none|minimal|low|medium|high|xhigh|max") String reasoningEffort,
+		@DefaultValue("2048") @Min(128) @Max(8192) int maxOutputTokens
 ) {
 	public enum Provider {
 		MOCK,

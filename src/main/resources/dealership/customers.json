@@ -1,0 +1,224 @@
+[
+	{
+		"customer_id": "demo-renewal",
+		"first_name": "Maria",
+		"last_name": "Demo",
+		"phone_number": null,
+		"contact_info": {
+			"SMS": "demo-renewal-sms",
+			"TELEGRAM": "demo-renewal-telegram"
+		},
+		"vin": "DEMO-ONLY-VIN-1",
+		"vehicle_model": "Toyota Vios",
+		"plate_number": "DEMO-1",
+		"renewal_type": "registration",
+		"renewal_status": "upcoming",
+		"renewal_due": "2026-10-31",
+		"service_offerings": [
+			"registration",
+			"2-in-1",
+			"3-in-1"
+		],
+		"script_used": "opening",
+		"preferred_channel": "SMS",
+		"available_channels": [
+			"SMS",
+			"TELEGRAM"
+		],
+		"channel_consent": {
+			"SMS": true,
+			"TELEGRAM": true
+		},
+		"campaign_id": "registration-renewal",
+		"campaign_status": "READY",
+		"registration_due": "2026-10-31",
+		"insurance_due": null,
+		"ctpl_status": "required",
+		"dealer_branch": "Toyota Manila Bay (demo)"
+	},
+	{
+		"customer_id": "demo-booking",
+		"first_name": "Paolo",
+		"last_name": "Demo",
+		"phone_number": null,
+		"contact_info": {
+			"SMS": "demo-booking-sms",
+			"TELEGRAM": "demo-booking-telegram"
+		},
+		"vin": "DEMO-ONLY-VIN-2",
+		"vehicle_model": "Toyota Corolla",
+		"plate_number": "DEMO-2",
+		"renewal_type": "registration",
+		"renewal_status": "upcoming",
+		"renewal_due": "2026-10-31",
+		"service_offerings": [
+			"registration",
+			"2-in-1",
+			"3-in-1"
+		],
+		"script_used": "opening",
+		"preferred_channel": "SMS",
+		"available_channels": [
+			"SMS",
+			"TELEGRAM"
+		],
+		"channel_consent": {
+			"SMS": true,
+			"TELEGRAM": true
+		},
+		"campaign_id": "registration-renewal",
+		"campaign_status": "READY",
+		"registration_due": "2026-10-31",
+		"insurance_due": null,
+		"ctpl_status": "current",
+		"dealer_branch": "Toyota Manila Bay (demo)"
+	},
+	{
+		"customer_id": "demo-reschedule",
+		"first_name": "Elena",
+		"last_name": "Demo",
+		"phone_number": null,
+		"contact_info": {
+			"SMS": "demo-reschedule-sms",
+			"TELEGRAM": "demo-reschedule-telegram"
+		},
+		"vin": "DEMO-ONLY-VIN-3",
+		"vehicle_model": "Toyota Innova",
+		"plate_number": "DEMO-3",
+		"renewal_type": "registration",
+		"renewal_status": "upcoming",
+		"renewal_due": "2026-10-31",
+		"service_offerings": [
+			"registration",
+			"2-in-1",
+			"3-in-1"
+		],
+		"script_used": "opening",
+		"preferred_channel": "SMS",
+		"available_channels": [
+			"SMS",
+			"TELEGRAM"
+		],
+		"channel_consent": {
+			"SMS": true,
+			"TELEGRAM": true
+		},
+		"campaign_id": "registration-renewal",
+		"campaign_status": "READY",
+		"registration_due": "2026-10-31",
+		"insurance_due": null,
+		"ctpl_status": "required",
+		"dealer_branch": "Toyota Manila Bay (demo)"
+	},
+	{
+		"customer_id": "demo-no-response",
+		"first_name": "Carlo",
+		"last_name": "Demo",
+		"phone_number": null,
+		"contact_info": {
+			"SMS": "demo-no-response-sms",
+			"TELEGRAM": "demo-no-response-telegram"
+		},
+		"vin": "DEMO-ONLY-VIN-4",
+		"vehicle_model": "Toyota Vios",
+		"plate_number": "DEMO-4",
+		"renewal_type": "registration",
+		"renewal_status": "upcoming",
+		"renewal_due": "2026-10-31",
+		"service_offerings": [
+			"registration",
+			"2-in-1",
+			"3-in-1"
+		],
+		"script_used": "opening",
+		"preferred_channel": "SMS",
+		"available_channels": [
+			"SMS",
+			"TELEGRAM"
+		],
+		"channel_consent": {
+			"SMS": true,
+			"TELEGRAM": true
+		},
+		"campaign_id": "registration-renewal",
+		"campaign_status": "READY",
+		"registration_due": "2026-10-31",
+		"insurance_due": null,
+		"ctpl_status": "current",
+		"dealer_branch": "Toyota Manila Bay (demo)"
+	},
+	{
+		"customer_id": "demo-cross-channel",
+		"first_name": "Ana",
+		"last_name": "Demo",
+		"phone_number": null,
+		"contact_info": {
+			"SMS": "demo-cross-channel-sms",
+			"TELEGRAM": "demo-cross-channel-telegram"
+		},
+		"vin": "DEMO-ONLY-VIN-5",
+		"vehicle_model": "Toyota Corolla",
+		"plate_number": "DEMO-5",
+		"renewal_type": "registration",
+		"renewal_status": "upcoming",
+		"renewal_due": "2026-10-31",
+		"service_offerings": [
+			"registration",
+			"2-in-1",
+			"3-in-1"
+		],
+		"script_used": "opening",
+		"preferred_channel": "SMS",
+		"available_channels": [
+			"SMS",
+			"TELEGRAM"
+		],
+		"channel_consent": {
+			"SMS": true,
+			"TELEGRAM": true
+		},
+		"campaign_id": "registration-renewal",
+		"campaign_status": "READY",
+		"registration_due": "2026-10-31",
+		"insurance_due": null,
+		"ctpl_status": "required",
+		"dealer_branch": "Toyota Manila Bay (demo)"
+	},
+	{
+		"customer_id": "demo-privacy",
+		"first_name": "Luis",
+		"last_name": "Demo",
+		"phone_number": null,
+		"contact_info": {
+			"SMS": "demo-privacy-sms",
+			"TELEGRAM": "demo-privacy-telegram"
+		},
+		"vin": "DEMO-ONLY-VIN-6",
+		"vehicle_model": "Toyota Innova",
+		"plate_number": "DEMO-6",
+		"renewal_type": "registration",
+		"renewal_status": "upcoming",
+		"renewal_due": "2026-10-31",
+		"service_offerings": [
+			"registration",
+			"2-in-1",
+			"3-in-1"
+		],
+		"script_used": "opening",
+		"preferred_channel": "SMS",
+		"available_channels": [
+			"SMS",
+			"TELEGRAM"
+		],
+		"channel_consent": {
+			"SMS": true,
+			"TELEGRAM": true
+		},
+		"campaign_id": "registration-renewal",
+		"campaign_status": "READY",
+		"registration_due": "2026-10-31",
+		"insurance_due": null,
+		"ctpl_status": "current",
+		"dealer_branch": "Toyota Manila Bay (demo)"
+	}
+]

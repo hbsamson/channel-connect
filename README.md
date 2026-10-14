@@ -6,13 +6,15 @@ A Java 25 Spring Boot application for Messenger and WhatsApp, with one entry poi
 
 Connectors live under `com.svi.channelconnect.messenger` and `com.svi.channelconnect.whatsapp`. AI adapters live under `ai` and shared messaging contracts under `common`.
 
-`MessagingAppHandler` selects a `MessagingChannel` adapter by its channel name. Messenger uses it to submit replies after generating them from persisted conversation history. WhatsApp uses its stateless AI reply operation. Existing webhook authentication, queues, deduplication and provider-specific validation stay in each connector.
+`MessagingAppHandler` selects a `MessagingChannel` adapter by its channel name. Messenger and WhatsApp normalize authenticated inbound events into the dealership conversation service, which resolves verified customer identities, persists cross-channel context, and executes grounded service/appointment workflows. Existing webhook authentication, queues and provider clients stay in each connector. Shared dealership behavior lives under `dealership`; channel-neutral AI interpretation remains under `ai`.
 
 To add a platform, implement `common.service.MessagingChannel` as a Spring bean with a unique channel name, add its authenticated webhook and dispatch adapter, and call the handler from that workflow. Adding an adapter does not expose a public send endpoint. Provider acceptance is separate from delivery confirmation. The shared text operation is for channel workflows; WhatsApp application-initiated messages still use the guarded template endpoint.
 
 ## Configuration and local development
 
-Use `.env.example` as an environment-variable inventory; Spring does not load it automatically. Configure both connectors, the Messenger OpenAI client, and admin credentials through environment variables. `AI_PROVIDER=mock` selects the stateless mock AI used by WhatsApp; Messenger retains its history-aware OpenAI integration and requires its OpenAI configuration.
+Use `.env.example` as an environment-variable inventory; Spring does not load it automatically. Configure credentials through environment variables. `AI_PROVIDER=mock` selects deterministic dealership intent parsing; `openai` uses the shared history-aware AI boundary. The legacy Messenger OpenAI client remains available in the repository, but dealership workflows use the configurable prompt and approved catalog.
+
+For the October 16 campaign demo, run the PowerShell launcher and scenario runner described in [DEMO_GUIDE.md](DEMO_GUIDE.md). The launcher explicitly loads `.env` and supplies offline defaults for inactive connectors. SMS and Telegram are simulations; real Meta delivery requires configured tester accounts and live verification. The guide covers script execution, identity linking, campaign controls, persistence, and channel limitations.
 
 ```powershell
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
@@ -27,6 +29,7 @@ Configuration, logging and Flyway migrations are under `src/main/resources`. Tes
 - Messenger webhook: `GET` and `POST /api/webhooks/messenger`.
 - WhatsApp webhook: `GET` and `POST /webhooks/whatsapp`.
 - Admin conversation deletion: `DELETE /api/admin/conversations/{id}`, requiring the admin role through HTTP Basic authentication.
+- Dealership demo controls: `/api/admin/demo/**`, requiring HTTP Basic admin authentication and the `local` or `test` profile.
 - Local WhatsApp templates: `POST /api/v1/whatsapp/messages`, requiring a bearer token, recipient/template allowlists and an `Idempotency-Key`.
 
 Webhook POST requests require valid Meta signatures. A WhatsApp template response of `202 Accepted` means Meta accepted the submission; delivery is confirmed by a later webhook.
@@ -34,3 +37,5 @@ Webhook POST requests require valid Meta signatures. A WhatsApp template respons
 ## Delivery limitations
 
 WhatsApp's dispatcher, outbound endpoint and process-local idempotency store are restricted to `local` and `test`. Production startup requires a durable WhatsApp dispatcher. Messenger's work queue is also in memory and can lose queued events on restart; its conversation persistence does not make the queue durable. Production delivery requires durable dispatch, deduplication and operational recovery.
+
+Campaign claims and attempts persist in H2; an interrupted send becomes an unknown outcome and is blocked from automatic resend. The demo supports one application instance, configured Manila appointment slots, and internal demo bookings. Human handoff records an event without sending external notifications. V3 adds dealership tables while preserving V1/V2 Messenger history, imported only for an explicitly verified identity.

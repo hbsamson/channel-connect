@@ -19,13 +19,19 @@ public class WhatsAppWebhookService {
 	private final WhatsAppMessageMapper mapper;
 	private final InboundMessageDispatcher dispatcher;
 	private final MeterRegistry meterRegistry;
+	private final com.svi.channelconnect.dealership.persistence.DealershipRepository conversations;
+	private final String accountId;
 
 	public WhatsAppWebhookService(ObjectMapper objectMapper, WhatsAppMessageMapper mapper,
-			InboundMessageDispatcher dispatcher, MeterRegistry meterRegistry) {
+			InboundMessageDispatcher dispatcher, MeterRegistry meterRegistry,
+			com.svi.channelconnect.dealership.persistence.DealershipRepository conversations,
+			com.svi.channelconnect.whatsapp.config.WhatsAppProperties properties) {
 		this.objectMapper = objectMapper;
 		this.mapper = mapper;
 		this.dispatcher = dispatcher;
 		this.meterRegistry = meterRegistry;
+		this.conversations = conversations;
+		this.accountId = properties.phoneNumberId();
 	}
 
 	public WebhookHandlingResult handle(byte[] rawBody) {
@@ -35,6 +41,18 @@ public class WhatsAppWebhookService {
 		}
 
 		WhatsAppMessageMapper.MappingResult mapping = mapper.map(webhook);
+		for (var entry : webhook.entry()) {
+			if (entry == null || entry.changes() == null) continue;
+			for (var change : entry.changes()) {
+				if (change == null || !"messages".equals(change.field()) || change.value() == null) continue;
+				var value = change.value();
+				if (!"whatsapp".equals(value.messagingProduct()) || value.metadata() == null
+						|| !accountId.equals(value.metadata().phoneNumberId()) || value.statuses() == null) continue;
+				for (var status : value.statuses()) if (status != null && status.id() != null && status.status() != null) {
+					conversations.delivery("WHATSAPP", accountId, status.id(), status.status(), System.currentTimeMillis());
+				}
+			}
+		}
 		int accepted = 0;
 		int duplicates = 0;
 		int overloaded = 0;

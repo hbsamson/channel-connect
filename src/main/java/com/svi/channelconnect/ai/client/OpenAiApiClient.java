@@ -15,6 +15,10 @@ import com.openai.errors.RateLimitException;
 import com.openai.errors.UnauthorizedException;
 import com.openai.models.responses.Response;
 import com.openai.models.responses.ResponseCreateParams;
+import com.openai.models.responses.ResponseTextConfig;
+import com.openai.models.ResponseFormatJsonObject;
+import com.openai.models.Reasoning;
+import com.openai.models.ReasoningEffort;
 import com.svi.channelconnect.ai.config.AiProperties;
 import com.svi.channelconnect.ai.dto.AiRequest;
 import com.svi.channelconnect.ai.dto.AiResponse;
@@ -38,10 +42,20 @@ public class OpenAiApiClient implements AiClient {
 
 	@Override
 	public AiResponse generateResponse(AiRequest request) {
-		ResponseCreateParams params = ResponseCreateParams.builder()
+		ResponseCreateParams.Builder builder = ResponseCreateParams.builder()
 				.model(properties.model())
 				.input(request.message())
-				.build();
+				.store(false);
+		if (StringUtils.hasText(request.instructions())) {
+			builder.instructions(request.instructions()).maxOutputTokens((long) properties.maxOutputTokens());
+			if (StringUtils.hasText(properties.reasoningEffort())) {
+				builder.reasoning(Reasoning.builder().effort(ReasoningEffort.of(properties.reasoningEffort())).build());
+			}
+		}
+		if (request.jsonOutput()) {
+			builder.text(ResponseTextConfig.builder().format(ResponseFormatJsonObject.builder().build()).build());
+		}
+		ResponseCreateParams params = builder.build();
 		try {
 			Response response = openAIClient.responses().create(params);
 			String text = response.output().stream()

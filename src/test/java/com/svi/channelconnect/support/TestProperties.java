@@ -31,12 +31,12 @@ public final class TestProperties {
 
 	public static AiProperties mockAi() {
 		return new AiProperties(AiProperties.Provider.MOCK, "", "",
-				URI.create("https://api.openai.com/v1"), Duration.ofSeconds(1), 0, 4096);
+				URI.create("https://api.openai.com/v1"), Duration.ofSeconds(1), 0, 4096, "", 2048);
 	}
 
 	public static AiProperties openAi() {
 		return new AiProperties(AiProperties.Provider.OPENAI, "test-openai-key", "test-model",
-				URI.create("https://api.openai.com/v1"), Duration.ofSeconds(1), 0, 4096);
+				URI.create("https://api.openai.com/v1"), Duration.ofSeconds(1), 0, 4096, "minimal", 2048);
 	}
 
 	public static DispatchProperties dispatch(int workers, int queueCapacity) {

@@ -82,4 +82,19 @@ class OpenAiApiClientTests {
 				.isInstanceOfSatisfying(AiClientException.class,
 						exception -> assertThat(exception.category()).isEqualTo(ExternalFailureCategory.TIMEOUT));
 	}
+	@Test
+	void appliesDealerInstructionsJsonOutputAndConfiguredReasoningWithoutProviderStorage() {
+		Response response = mock(Response.class);
+		when(response.output()).thenReturn(List.of());
+		when(responseService.create(any(ResponseCreateParams.class))).thenReturn(response);
+		assertThatThrownBy(() -> client.generateResponse(new AiRequest("c", "customer context", "Return a JSON intent", true)))
+				.isInstanceOf(AiClientException.class);
+		var request = org.mockito.ArgumentCaptor.forClass(ResponseCreateParams.class);
+		verify(responseService).create(request.capture());
+		assertThat(request.getValue().instructions()).contains("Return a JSON intent");
+		assertThat(request.getValue().store()).contains(false);
+		assertThat(request.getValue().reasoning().orElseThrow().effort()).contains(com.openai.models.ReasoningEffort.MINIMAL);
+		assertThat(request.getValue().maxOutputTokens()).contains(2048L);
+		assertThat(request.getValue().text().orElseThrow().format().orElseThrow().isJsonObject()).isTrue();
+	}
 }

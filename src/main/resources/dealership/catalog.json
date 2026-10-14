@@ -1,0 +1,93 @@
+{
+	"disclaimer": "All prices, hours, locations, and appointment slots below are fictional demo data.",
+	"hours": "Demo hours: Monday–Saturday, 8:00 AM–5:00 PM (Asia/Manila).",
+	"location": "Demo service desk; confirm the real branch address with the dealership.",
+	"privacyContact": null,
+	"services": {
+		"registration": {
+			"name": "registration renewal",
+			"price": "Demo service fee: PHP 1,500; government fees need confirmation.",
+			"inclusions": [
+				"Registration assistance"
+			]
+		},
+		"pms": {
+			"name": "Preventive Maintenance Service",
+			"price": "Demo starting price: PHP 3,000; final vehicle-specific quote needs confirmation.",
+			"inclusions": [
+				"Demo PMS inspection"
+			]
+		},
+		"2-in-1": {
+			"name": "2-in-1 package",
+			"price": "Price needs dealership confirmation.",
+			"inclusions": [
+				"PMS",
+				"Comprehensive insurance renewal assistance"
+			]
+		},
+		"3-in-1": {
+			"name": "3-in-1 package",
+			"price": "Price needs dealership confirmation.",
+			"inclusions": [
+				"Registration renewal assistance",
+				"CTPL only when the customer's record says it is required",
+				"PMS"
+			]
+		},
+		"custom": {
+			"name": "custom service package",
+			"price": "Price needs dealership confirmation.",
+			"inclusions": [
+				"Inclusions need confirmation"
+			]
+		}
+	},
+	"slots": [
+		{
+			"id": "2026-10-16-0900",
+			"startsAt": "2026-10-16T09:00:00+08:00",
+			"capacity": 2
+		},
+		{
+			"id": "2026-10-16-1000",
+			"startsAt": "2026-10-16T10:00:00+08:00",
+			"capacity": 2
+		},
+		{
+			"id": "2026-10-16-1400",
+			"startsAt": "2026-10-16T14:00:00+08:00",
+			"capacity": 2
+		},
+		{
+			"id": "2026-10-17-0900",
+			"startsAt": "2026-10-17T09:00:00+08:00",
+			"capacity": 2
+		},
+		{
+			"id": "2026-10-17-1000",
+			"startsAt": "2026-10-17T10:00:00+08:00",
+			"capacity": 2
+		},
+		{
+			"id": "2026-10-17-1400",
+			"startsAt": "2026-10-17T14:00:00+08:00",
+			"capacity": 2
+		},
+		{
+			"id": "2026-10-19-0900",
+			"startsAt": "2026-10-19T09:00:00+08:00",
+			"capacity": 2
+		},
+		{
+			"id": "2026-10-19-1000",
+			"startsAt": "2026-10-19T10:00:00+08:00",
+			"capacity": 2
+		},
+		{
+			"id": "2026-10-19-1400",
+			"startsAt": "2026-10-19T14:00:00+08:00",
+			"capacity": 2
+		}
+	]
+}
