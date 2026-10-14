@@ -1,21 +1,21 @@
 {
 	"disclaimer": "All prices, hours, locations, and appointment slots below are fictional demo data.",
-	"hours": "Demo hours: Monday–Saturday, 8:00 AM–5:00 PM (Asia/Manila).",
-	"location": "Demo service desk; confirm the real branch address with the dealership.",
+	"hours": "Service hours: Monday–Saturday, 8:00 AM–5:00 PM (Asia/Manila).",
+	"location": "Please confirm the branch address with a dealership representative po.",
 	"privacyContact": null,
 	"services": {
 		"registration": {
 			"name": "registration renewal",
-			"price": "Demo service fee: PHP 1,500; government fees need confirmation.",
+			"price": "Service fee: PHP 1,500; government fees need confirmation.",
 			"inclusions": [
 				"Registration assistance"
 			]
 		},
 		"pms": {
 			"name": "Preventive Maintenance Service",
-			"price": "Demo starting price: PHP 3,000; final vehicle-specific quote needs confirmation.",
+			"price": "Starting price: PHP 3,000; final vehicle-specific quote needs confirmation.",
 			"inclusions": [
-				"Demo PMS inspection"
+				"PMS inspection"
 			]
 		},
 		"2-in-1": {

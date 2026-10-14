@@ -4,6 +4,8 @@ The demo stores shared history, customer identity links, workflow state, outreac
 
 ## Start and run
 
+Customer messages introduce the dealership's customer service bot and use normal service wording. Appointment acknowledgments describe recorded requests pending dealership confirmation. Representative requests retain tracking numbers and pending-review status. For the bundled campaign ID, conversational replies use the current resource scripts after restart; scheduled outreach retains the configuration captured when the campaign started. The AI interprets intent, while the application renders replies and performs actions.
+
 Use Java 25 and the checked-in Maven wrapper. From the repository root, in the first PowerShell terminal:
 
 ```powershell

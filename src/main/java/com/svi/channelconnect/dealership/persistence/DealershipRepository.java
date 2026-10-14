@@ -176,6 +176,10 @@ public class DealershipRepository {
 		return db.sql("SELECT sequence, id, direction, channel, external_id, content, delivery_status, occurred_at FROM (SELECT * FROM dealer_messages WHERE customer_id = ? ORDER BY sequence DESC LIMIT ?) ORDER BY sequence")
 				.params(id, limit).query(ConversationMessage.class).list();
 	}
+	public boolean hasOutboundMessage(String customerId) {
+		return db.sql("SELECT COUNT(*) FROM dealer_messages WHERE customer_id = ? AND direction = 'OUTBOUND'")
+				.param(customerId).query(Long.class).single() > 0;
+	}
 	public void insertMessage(String id, String customer, String direction, String channel, String account,
 			String external, String content, String status, long at) {
 		db.sql("INSERT INTO dealer_messages(id, customer_id, direction, channel, account_id, external_id, content, delivery_status, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")

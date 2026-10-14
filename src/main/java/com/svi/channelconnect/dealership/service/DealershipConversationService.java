@@ -48,6 +48,7 @@ public class DealershipConversationService {
 				reply = "I couldn't complete that request po. Please try again or ask for a dealership representative.";
 			}
 			String messageId = UUID.randomUUID().toString();
+			if (!store.hasOutboundMessage(receipt.customerId())) reply = assistant.introduction() + reply;
 			store.insertMessage(messageId, receipt.customerId(), "OUTBOUND", incoming.channel(), incoming.accountId(), null, reply, "PENDING", clock.millis());
 			try {
 				var identity = store.identity(incoming.channel(), incoming.accountId(), incoming.senderId()).orElseThrow();
