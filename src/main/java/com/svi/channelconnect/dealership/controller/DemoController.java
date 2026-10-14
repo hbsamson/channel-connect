@@ -26,14 +26,16 @@ public class DemoController {
 	private final CampaignService campaigns;
 	private final DealershipConversationService conversations;
 	private final Clock clock;
+	private final com.svi.channelconnect.sms.config.SmsProperties sms;
 
 	public DemoController(DealershipRepository store, DemoConfiguration config, CampaignService campaigns,
-			DealershipConversationService conversations, Clock clock) {
+			DealershipConversationService conversations, Clock clock, com.svi.channelconnect.sms.config.SmsProperties sms) {
 		this.store = store;
 		this.config = config;
 		this.campaigns = campaigns;
 		this.conversations = conversations;
 		this.clock = clock;
+		this.sms = sms;
 	}
 	@PostMapping("/seed")
 	public List<CustomerProfile> seed() {
@@ -58,8 +60,15 @@ public class DemoController {
 	}
 	@PostMapping("/customers/{id}/identities")
 	public CustomerView link(@PathVariable String id, @Valid @RequestBody LinkIdentity identity) {
-		if (List.of("SMS", "TELEGRAM").contains(identity.channel()) && (!identity.accountId().equals("demo") || !identity.externalId().startsWith("demo-"))) {
+		if ((identity.channel().equals("TELEGRAM") || identity.channel().equals("SMS") && !sms.enabled())
+				&& (!identity.accountId().equals("demo") || !identity.externalId().startsWith("demo-"))) {
 			throw new IllegalArgumentException("SMS and Telegram are simulations; use fictional demo identities");
+		}
+		if (identity.channel().equals("SMS") && sms.enabled()) {
+			sms.channel(identity.accountId());
+			if (!identity.externalId().equals(com.svi.channelconnect.sms.service.SmsValidation.phone(identity.externalId()))) {
+				throw new IllegalArgumentException("SMS identity must use normalized E.164 format");
+			}
 		}
 		synchronized (campaigns) {
 			store.link(new ChannelIdentity(identity.channel(), identity.accountId(), identity.externalId(), id,
@@ -77,6 +86,7 @@ public class DemoController {
 	public List<CampaignExecution> advance(@RequestBody Advance request) { return campaigns.advance(request.executionId(), request.force()); }
 	@PostMapping("/replies")
 	public DealershipConversationService.Result reply(@Valid @RequestBody IncomingMessage message) {
+		if (message.channel().equals("SMS") && sms.enabled()) throw new IllegalArgumentException("SMS ingress requires GoIP UDP; use the protected simulator endpoint in mock mode");
 		if (!List.of("SMS", "TELEGRAM").contains(message.channel()) || !message.accountId().equals("demo") || !message.senderId().startsWith("demo-")) {
 			throw new IllegalArgumentException("Only fictional SMS/Telegram messages can be simulated; real channel replies require authenticated webhooks");
 		}
@@ -85,7 +95,8 @@ public class DemoController {
 	@GetMapping("/configuration")
 	public Map<String, Object> configuration() {
 		return Map.of("campaign", config.campaign(), "catalog", config.catalog(), "channels",
-				Map.of("SMS", "SIMULATED", "TELEGRAM", "SIMULATED", "MESSENGER", "REAL_ADAPTER_REQUIRES_LIVE_VERIFICATION", "WHATSAPP", "REAL_ADAPTER_REQUIRES_LIVE_VERIFICATION"));
+				Map.of("SMS", sms.enabled() ? sms.mode() == com.svi.channelconnect.sms.config.SmsProperties.Mode.MOCK ? "GOIP_UDP_SIMULATOR" : "GOIP_REQUIRES_HARDWARE_VERIFICATION" : "SIMULATED",
+						"TELEGRAM", "SIMULATED", "MESSENGER", "REAL_ADAPTER_REQUIRES_LIVE_VERIFICATION", "WHATSAPP", "REAL_ADAPTER_REQUIRES_LIVE_VERIFICATION"));
 	}
 	public record StartCampaign(@NotBlank @Size(max = 128) String customerId,
 			@Pattern(regexp = "SMS|TELEGRAM|MESSENGER|WHATSAPP") String baseChannel, CampaignConfiguration configuration) { }

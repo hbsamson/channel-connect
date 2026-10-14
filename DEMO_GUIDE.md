@@ -2,6 +2,8 @@
 
 The demo stores shared history, customer identity links, workflow state, outreach attempts, and appointments in file-based H2. All bundled customers, prices, hours, locations, and slots are fictional. A demo booking is an internal record, not a real dealership reservation. Dealership schedules use `Asia/Manila`.
 
+The default demo still uses fictional SMS identities. Explicit GoIP mock mode replaces that adapter with loopback UDP and requires configured mobile-shaped test identities and SMS-sized scripts. See [the SMS integration guide](docs/goip-sms.md) for its separate launch command and Postman collection. In that mode use the protected UDP simulator ingress, rather than `/api/admin/demo/replies`, for SMS. Hardware operation remains a separate authorized milestone.
+
 ## Start and run
 
 Use Java 25 and the checked-in Maven wrapper. From the repository root, in the first PowerShell terminal:

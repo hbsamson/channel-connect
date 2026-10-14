@@ -2,9 +2,13 @@
 
 A Java 25 Spring Boot application for Messenger and WhatsApp, with one entry point: `com.svi.channelconnect.ChannelConnectApplication`.
 
+SMS is available through an independent provider boundary and the documented GoIP UDP protocol. It is disabled by default; explicit mock mode uses an actual loopback UDP gateway simulator. See [GoIP SMS setup, protocol details, local API examples, and hardware cutover prerequisites](docs/goip-sms.md). Physical GoIP operation has not been verified.
+
 ## Architecture
 
 Connectors live under `com.svi.channelconnect.messenger` and `com.svi.channelconnect.whatsapp`. AI adapters live under `ai` and shared messaging contracts under `common`.
+
+The SMS connector lives under `sms`, with a persistent inbox/outbox, bounded workers, scoped conversations, and explicit queued, gateway-reported, failed, and unknown statuses. It reuses the existing dealership assistant and AI boundary. An unknown transmission is blocked from automatic resend.
 
 `MessagingAppHandler` selects a `MessagingChannel` adapter by its channel name. Messenger and WhatsApp normalize authenticated inbound events into the dealership conversation service, which resolves verified customer identities, persists cross-channel context, and executes grounded service/appointment workflows. Existing webhook authentication, queues and provider clients stay in each connector. Shared dealership behavior lives under `dealership`; channel-neutral AI interpretation remains under `ai`.
 

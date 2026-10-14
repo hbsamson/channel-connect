@@ -124,7 +124,8 @@ public class CampaignService {
 		if (claim.isEmpty()) return;
 		try {
 			var sent = channels.campaign(selected, campaign, script, content, values, claim.get().id(), now);
-			store.complete(execution, claim.get(), sent.providerMessageId(), sent.status().equals("SIMULATED") ? "SIMULATED" : "ACCEPTED_BY_PROVIDER", clock.millis());
+			store.complete(execution, claim.get(), sent.providerMessageId(), selected.channel().equals("SMS") ? sent.status()
+					: sent.status().equals("SIMULATED") ? "SIMULATED" : "ACCEPTED_BY_PROVIDER", clock.millis());
 		} catch (RuntimeException exception) {
 			boolean ambiguous = true;
 			boolean retryable = false;

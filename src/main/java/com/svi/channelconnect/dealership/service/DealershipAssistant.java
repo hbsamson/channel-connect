@@ -39,12 +39,18 @@ public class DealershipAssistant {
 	}
 
 	public Answer answer(String customerId, boolean verified, String message) {
-		CustomerProfile customer = store.customer(customerId);
 		Workflow state = store.workflow(customerId);
+		return apply(customerId, verified, state, interpret(customerId, verified, message, state,
+				store.history(customerId, properties.historyLimit()), store.summary(customerId)));
+	}
+
+	/** Language interpretation has no business side effects and runs outside SMS database transactions. */
+	public DealershipIntent interpret(String customerId, boolean verified, String message, Workflow state, Object history, String summary) {
+		CustomerProfile customer = store.customer(customerId);
 		Map<String, Object> context = new HashMap<>();
 		context.put("workflow", state);
-		context.put("history", store.history(customerId, properties.historyLimit()));
-		context.put("summary", store.summary(customerId));
+		context.put("history", history);
+		context.put("summary", summary);
 		context.put("catalog", config.catalog());
 		context.put("appointment", store.appointment(customerId).orElse(null));
 		CampaignConfiguration campaign = store.activeCampaign(customerId).orElse(config.campaign());
@@ -58,8 +64,14 @@ public class DealershipAssistant {
 			known.put("ctplStatus", customer.ctplStatus());
 			context.put("customer", known);
 		}
-		DealershipIntent intent = interpreter.interpret(customerId, message,
+		return interpreter.interpret(customerId, message,
 				config.prompt().replace("{{dealer_name}}", properties.name()), context);
+	}
+
+	/** SMS calls this inside the same transaction as scoped state and its durable reply. */
+	public Answer apply(String customerId, boolean verified, Workflow state, DealershipIntent intent) {
+		CustomerProfile customer = store.customer(customerId);
+		CampaignConfiguration campaign = store.activeCampaign(customerId).orElse(config.campaign());
 		String language = intent.language();
 		state = new Workflow(state.stage(), state.serviceId(), state.date(), state.time(), language);
 		var values = scripts.values(customer, properties.name(), serviceName(state.serviceId()), null);

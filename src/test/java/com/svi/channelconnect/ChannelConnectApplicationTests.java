@@ -25,10 +25,13 @@ class ChannelConnectApplicationTests {
 	private MockMvc mockMvc;
 	@Autowired
 	private AiClient aiClient;
+	@Autowired
+	private org.springframework.context.ApplicationContext context;
 
 	@Test
 	void contextLoads() {
 		assertThat(aiClient).isInstanceOf(MockAiClient.class);
+		assertThat(context.getBeansOfType(com.svi.channelconnect.sms.goip.GoipSmsProvider.class)).isEmpty();
 	}
 
 	@Test

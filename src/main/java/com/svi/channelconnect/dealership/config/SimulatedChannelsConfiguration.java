@@ -14,6 +14,7 @@ import com.svi.channelconnect.common.service.MessagingChannel;
 @Profile({"local", "test"})
 public class SimulatedChannelsConfiguration {
 	@Bean
+	@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "sms.enabled", havingValue = "false", matchIfMissing = true)
 	MessagingChannel simulatedSmsChannel() { return simulated("SMS"); }
 	@Bean
 	MessagingChannel simulatedTelegramChannel() { return simulated("TELEGRAM"); }

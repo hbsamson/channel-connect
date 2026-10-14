@@ -1,0 +1,52 @@
+{
+  "info": {
+    "name": "Channel Connect - local GoIP SMS",
+    "description": "Loopback simulator testing only. Set private bearer/admin credentials and run local,demo,sms-mock. No physical gateway endpoint is configured.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8080" },
+    { "key": "accountId", "value": "mock-sim-1" },
+    { "key": "testRecipient", "value": "+639000000001" },
+    { "key": "smsApiToken", "value": "" },
+    { "key": "adminUsername", "value": "" },
+    { "key": "adminPassword", "value": "" },
+    { "key": "idempotencyKey", "value": "local-sms-test-1" },
+    { "key": "messageId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Submit SMS - queued",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 202) pm.collectionVariables.set('messageId', pm.response.json().messageId);"] } }],
+      "request": {
+        "method": "POST",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{smsApiToken}}", "type": "string" }] },
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }],
+        "body": { "mode": "raw", "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"recipient\": \"{{testRecipient}}\",\n  \"content\": \"Local protocol test\"\n}" },
+        "url": "{{baseUrl}}/api/v1/sms/messages"
+      }
+    },
+    {
+      "name": "Get SMS status - delivery unconfirmed",
+      "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{smsApiToken}}", "type": "string" }] }, "url": "{{baseUrl}}/api/v1/sms/messages/{{messageId}}" }
+    },
+    {
+      "name": "Channel registrations",
+      "request": { "method": "GET", "auth": { "type": "basic", "basic": [{ "key": "username", "value": "{{adminUsername}}", "type": "string" }, { "key": "password", "value": "{{adminPassword}}", "type": "string" }] }, "url": "{{baseUrl}}/api/admin/sms/channels" }
+    },
+    {
+      "name": "Simulate inbound SMS through UDP",
+      "request": {
+        "method": "POST",
+        "auth": { "type": "basic", "basic": [{ "key": "username", "value": "{{adminUsername}}", "type": "string" }, { "key": "password", "value": "{{adminPassword}}", "type": "string" }] },
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"sender\": \"{{testRecipient}}\",\n  \"content\": \"What are your opening hours?\"\n}" },
+        "url": "{{baseUrl}}/api/admin/sms/simulator/receive"
+      }
+    },
+    {
+      "name": "Read-only line state",
+      "request": { "method": "GET", "auth": { "type": "basic", "basic": [{ "key": "username", "value": "{{adminUsername}}", "type": "string" }, { "key": "password", "value": "{{adminPassword}}", "type": "string" }] }, "url": "{{baseUrl}}/api/admin/sms/channels/{{accountId}}/query" }
+    }
+  ]
+}

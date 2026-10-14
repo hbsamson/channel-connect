@@ -146,7 +146,7 @@ public class DealershipRepository {
 		db.sql("UPDATE dealer_identities SET last_inbound_at = CASE WHEN last_inbound_at IS NULL OR last_inbound_at < ? THEN ? ELSE last_inbound_at END WHERE channel = ? AND account_id = ? AND external_id = ?")
 				.params(eventTime, eventTime, incoming.channel(), incoming.accountId(), incoming.senderId()).update();
 		db.sql("UPDATE dealer_conversations SET last_activity_at = ? WHERE customer_id = ?").params(now, identity.customerId()).update();
-		db.sql("UPDATE dealer_executions SET status = 'CUSTOMER_RESPONDED' WHERE customer_id = ? AND status IN ('READY','AWAITING_RESPONSE','FOLLOW_UP_SCHEDULED','CHANNEL_SWITCHED','SENDING')")
+		db.sql("UPDATE dealer_executions SET status = 'CUSTOMER_RESPONDED' WHERE customer_id = ? AND status IN ('READY','AWAITING_RESPONSE','FOLLOW_UP_SCHEDULED','CHANNEL_SWITCHED','SENDING','SMS_QUEUED')")
 				.param(identity.customerId()).update();
 		event(identity.customerId(), null, "CUSTOMER_RESPONDED", now);
 		return new Receipt(identity.customerId(), identity.verified(), false);
@@ -270,12 +270,35 @@ public class DealershipRepository {
 	@Transactional
 	public void complete(CampaignExecution execution, Claim claim, String providerId, String delivery, long now) {
 		messageStatus(claim.messageId(), providerId, delivery);
+		if (delivery.equals("QUEUED")) {
+			db.sql("UPDATE dealer_attempts SET status = 'QUEUED' WHERE id = ?").param(claim.id()).update();
+			db.sql("UPDATE dealer_executions SET status = 'SMS_QUEUED' WHERE id = ? AND status = 'SENDING'").param(execution.id()).update();
+			event(execution.customerId(), execution.id(), "MESSAGE_QUEUED", now);
+			// Reconcile a fast UDP result that committed before the workflow linked its application message ID.
+			db.sql("SELECT status FROM sms_outbox WHERE id = ? AND status IN ('GATEWAY_SENT','FAILED','UNKNOWN')")
+					.param(providerId).query(String.class).optional().ifPresent(result -> smsResult(providerId, result, now));
+			return;
+		}
 		db.sql("UPDATE dealer_attempts SET status = 'ACCEPTED' WHERE id = ?").param(claim.id()).update();
 		long delay = Math.max(execution.configuration().retryIntervalSeconds(), execution.configuration().cooldownSeconds()) * 1000;
 		db.sql("UPDATE dealer_executions SET status = 'FOLLOW_UP_SCHEDULED', last_contact_at = ?, next_attempt_at = ?, failure_count = 0 WHERE id = ? AND status = 'SENDING'")
 				.params(now, now + delay, execution.id()).update();
 		event(execution.customerId(), execution.id(), "MESSAGE_SENT", now);
 		event(execution.customerId(), execution.id(), "FOLLOW_UP_SCHEDULED", now);
+	}
+	@Transactional
+	public void smsResult(String providerId, String result, long now) {
+		var attempt = db.sql("SELECT a.id, a.message_id, a.execution_id FROM dealer_attempts a JOIN dealer_messages m ON m.id = a.message_id WHERE m.external_id = ? AND m.channel = 'SMS' AND a.status = 'QUEUED'")
+				.param(providerId).query((rs, row) -> new String[] {rs.getString(1), rs.getString(2), rs.getString(3)}).optional();
+		if (attempt.isEmpty()) return;
+		String[] a = attempt.get();
+		CampaignExecution execution = db.sql("SELECT * FROM dealer_executions WHERE id = ?").param(a[2]).query(this::executionRow).single();
+		db.sql("UPDATE dealer_executions SET status = 'SENDING' WHERE id = ? AND status = 'SMS_QUEUED'").param(execution.id()).update();
+		if (result.equals("GATEWAY_SENT")) complete(execution, new Claim(a[0], a[1]), providerId, result, now);
+		else {
+			fail(execution, new Claim(a[0], a[1]), result.equals("UNKNOWN"), 1, now);
+			messageStatus(a[1], providerId, result);
+		}
 	}
 	@Transactional
 	public void fail(CampaignExecution execution, Claim claim, boolean ambiguous, int maximumFailures, long now) {
@@ -288,6 +311,15 @@ public class DealershipRepository {
 	}
 	@Transactional
 	public void recover(long now) {
+		// Restore linkage if a durable SMS submission committed before the campaign recorded QUEUED.
+		var sms = db.sql("SELECT a.id, a.message_id, a.execution_id, o.id, o.status FROM dealer_attempts a JOIN sms_outbox o ON o.request_key = 'workflow:' || a.id WHERE a.status = 'CLAIMED'")
+				.query((rs, row) -> new String[] {rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5)}).list();
+		for (String[] row : sms) {
+			messageStatus(row[1], row[3], row[4]);
+			db.sql("UPDATE dealer_attempts SET status = 'QUEUED' WHERE id = ?").param(row[0]).update();
+			db.sql("UPDATE dealer_executions SET status = 'SMS_QUEUED' WHERE id = ? AND status = 'SENDING'").param(row[2]).update();
+			if (List.of("GATEWAY_SENT", "FAILED", "UNKNOWN").contains(row[4])) smsResult(row[3], row[4], now);
+		}
 		db.sql("UPDATE dealer_messages SET delivery_status = 'UNKNOWN' WHERE delivery_status = 'PENDING'").update();
 		db.sql("UPDATE dealer_attempts SET status = 'UNKNOWN' WHERE status = 'CLAIMED'").update();
 		db.sql("UPDATE dealer_executions SET status = 'FAILED' WHERE status = 'SENDING'").update();

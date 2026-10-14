@@ -26,21 +26,26 @@ public class DealershipChannelGateway {
 	private final ObjectProvider<OutboundMessageService> outbound;
 	private final ObjectProvider<OutboundMessagingProperties> restrictions;
 	private final boolean simulationsAvailable;
+	private final ObjectProvider<com.svi.channelconnect.sms.service.SmsService> sms;
 
 	public DealershipChannelGateway(MessagingAppHandler messaging, MessengerProperties messenger, WhatsAppProperties whatsapp,
-			ObjectProvider<OutboundMessageService> outbound, ObjectProvider<OutboundMessagingProperties> restrictions, Environment env) {
+			ObjectProvider<OutboundMessageService> outbound, ObjectProvider<OutboundMessagingProperties> restrictions, Environment env,
+			ObjectProvider<com.svi.channelconnect.sms.service.SmsService> sms) {
 		this.messaging = messaging;
 		this.messenger = messenger;
 		this.whatsapp = whatsapp;
 		this.outbound = outbound;
 		this.restrictions = restrictions;
 		this.simulationsAvailable = env.matchesProfiles("local", "test");
+		this.sms = sms;
 	}
 
 	public boolean canInitiate(ChannelIdentity identity, CampaignConfiguration config, String script, long now) {
 		if (!identity.verified() || !identity.consent() || !identity.outboundAllowed()) return false;
 		return switch (identity.channel()) {
-			case "SMS", "TELEGRAM" -> simulationsAvailable && identity.accountId().equals("demo") && identity.externalId().startsWith("demo-");
+			case "TELEGRAM" -> simulationsAvailable && identity.accountId().equals("demo") && identity.externalId().startsWith("demo-");
+			case "SMS" -> sms.getIfAvailable() != null ? sms.getObject().canInitiate(identity.accountId(), identity.externalId())
+					: simulationsAvailable && identity.accountId().equals("demo") && identity.externalId().startsWith("demo-");
 			case "MESSENGER" -> identity.accountId().equals(messenger.pageId()) && inWindow(identity, now);
 			case "WHATSAPP" -> {
 				var template = config.whatsAppTemplates() == null ? null : config.whatsAppTemplates().get(script);
@@ -67,14 +72,21 @@ public class DealershipChannelGateway {
 					new OutboundTemplateMessageRequest(identity.externalId(), template.name(), template.language(), parameters));
 			return new SendMessageResponseDTO("ACCEPTED_BY_PROVIDER", response.providerMessageId());
 		}
-		return messaging.sendMessage(identity.channel(), new OutgoingMessageDTO(identity.externalId(), content));
+		return messaging.sendMessage(identity.channel(), identity.channel().equals("SMS") && sms.getIfAvailable() != null
+				? new OutgoingMessageDTO(identity.externalId(), content, identity.accountId(), "campaign:" + idempotencyKey, null)
+				: new OutgoingMessageDTO(identity.externalId(), content));
 	}
 
 	public SendMessageResponseDTO reply(ChannelIdentity identity, String content, long now) {
+		return reply(identity, content, now, java.util.UUID.randomUUID().toString());
+	}
+	public SendMessageResponseDTO reply(ChannelIdentity identity, String content, long now, String requestId) {
 		if (identity.channel().equals("MESSENGER") || identity.channel().equals("WHATSAPP")) {
 			if (!inWindow(identity, now)) throw new IllegalArgumentException("Platform reply window has expired");
 		}
-		return messaging.sendMessage(identity.channel(), new OutgoingMessageDTO(identity.externalId(), content));
+		return messaging.sendMessage(identity.channel(), identity.channel().equals("SMS") && sms.getIfAvailable() != null
+				? new OutgoingMessageDTO(identity.externalId(), content, identity.accountId(), requestId, requestId)
+				: new OutgoingMessageDTO(identity.externalId(), content));
 	}
 	private boolean inWindow(ChannelIdentity identity, long now) {
 		return identity.lastInboundAt() != null && identity.lastInboundAt() <= now

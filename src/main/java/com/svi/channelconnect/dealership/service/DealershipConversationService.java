@@ -51,8 +51,9 @@ public class DealershipConversationService {
 			store.insertMessage(messageId, receipt.customerId(), "OUTBOUND", incoming.channel(), incoming.accountId(), null, reply, "PENDING", clock.millis());
 			try {
 				var identity = store.identity(incoming.channel(), incoming.accountId(), incoming.senderId()).orElseThrow();
-				var sent = channels.reply(identity, reply, clock.millis());
-				String status = sent.status().equals("SIMULATED") ? "SIMULATED" : "ACCEPTED_BY_PROVIDER";
+				var sent = channels.reply(identity, reply, clock.millis(), messageId);
+				String status = incoming.channel().equals("SMS") ? sent.status()
+						: sent.status().equals("SIMULATED") ? "SIMULATED" : "ACCEPTED_BY_PROVIDER";
 				store.messageStatus(messageId, sent.providerMessageId(), status);
 				store.event(receipt.customerId(), null, "MESSAGE_SENT", clock.millis());
 				return new Result(receipt.customerId(), reply, status);
