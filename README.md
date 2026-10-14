@@ -1,12 +1,12 @@
 # SVI Channel Connect
 
-A Java 25 Spring Boot application for Messenger and WhatsApp, with one entry point: `com.svi.messaging.MessagingApplication`.
+A Java 25 Spring Boot application for Messenger and WhatsApp, with one entry point: `com.svi.channelconnect.ChannelConnectApplication`.
 
 ## Architecture
 
-Connectors live under `com.svi.messaging.messenger` and `com.svi.messaging.whatsapp`. AI adapters live under `ai` and shared messaging contracts under `common`.
+Connectors live under `com.svi.channelconnect.messenger` and `com.svi.channelconnect.whatsapp`. AI adapters live under `ai` and shared messaging contracts under `common`.
 
-`MessagingApplicationHandler` selects a `MessagingChannel` adapter by its channel name. Messenger uses it to submit replies after generating them from persisted conversation history. WhatsApp uses its stateless AI reply operation. Existing webhook authentication, queues, deduplication and provider-specific validation stay in each connector.
+`MessagingAppHandler` selects a `MessagingChannel` adapter by its channel name. Messenger uses it to submit replies after generating them from persisted conversation history. WhatsApp uses its stateless AI reply operation. Existing webhook authentication, queues, deduplication and provider-specific validation stay in each connector.
 
 To add a platform, implement `common.service.MessagingChannel` as a Spring bean with a unique channel name, add its authenticated webhook and dispatch adapter, and call the handler from that workflow. Adding an adapter does not expose a public send endpoint. Provider acceptance is separate from delivery confirmation. The shared text operation is for channel workflows; WhatsApp application-initiated messages still use the guarded template endpoint.
 

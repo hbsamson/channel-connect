@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a single-module Java 25 Spring Boot application built with Maven. Production code lives under `src/main/java/com/svi/messaging/` and is organized by feature. Keep WhatsApp HTTP, orchestration, Meta integration, DTOs, models, security, and configuration under `whatsapp/`. Keep the channel-neutral AI boundary and adapters under `ai/`; that package must not depend on WhatsApp. Put only genuinely cross-feature types under `common/`. Tests mirror the main package tree, with shared test factories under `com.svi.messaging.support` and webhook fixtures in `src/test/resources/fixtures/whatsapp/`.
+This is a single-module Java 25 Spring Boot application built with Maven. Production code lives under `src/main/java/com/svi/channelconnect/` and is organized by feature. Keep WhatsApp HTTP, orchestration, Meta integration, DTOs, models, security, and configuration under `whatsapp/`. Keep the channel-neutral AI boundary and adapters under `ai/`; that package must not depend on WhatsApp. Put only genuinely cross-feature types under `common/`. Keep `ChannelConnectApplication` and the shared `MessagingAppHandler` directly under the root package, with channel-specific implementations in sibling `whatsapp/` and `messenger/` folders. Tests mirror the main package tree, with shared test factories under `com.svi.channelconnect.support` and webhook fixtures in `src/test/resources/fixtures/whatsapp/`.
 
 ## Build, Test, and Development Commands
 
@@ -17,7 +17,7 @@ Run commands from the repository root. Do not commit generated `target/` content
 
 ## Coding Style & Naming Conventions
 
-Follow standard Java naming: `PascalCase` for classes and interfaces, `camelCase` for methods and variables, and uppercase snake case for constants. Retain the root package `com.svi.messaging` and place new channel connectors directly beneath it without a `features` wrapper. Match the existing Spring-generated style: tabs for indentation, opening braces on the declaration line, and one public top-level type per file. Prefer constructor injection for Spring dependencies and small classes with a single responsibility. No formatter or linter is currently configured; use IDE formatting and remove unused imports before committing.
+Follow standard Java naming: `PascalCase` for classes and interfaces, `camelCase` for methods and variables, and uppercase snake case for constants. Retain the root package `com.svi.channelconnect` and place new channel connectors directly beneath it without a `features` wrapper. Match the existing Spring-generated style: tabs for indentation, opening braces on the declaration line, and one public top-level type per file. Prefer constructor injection for Spring dependencies and small classes with a single responsibility. No formatter or linter is currently configured; use IDE formatting and remove unused imports before committing.
 
 ## Testing Guidelines
 
