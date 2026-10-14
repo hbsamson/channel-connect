@@ -2,7 +2,7 @@
 
 A Java 25 Spring Boot application for Messenger and WhatsApp, with one entry point: `com.svi.channelconnect.ChannelConnectApplication`.
 
-SMS is available through an independent provider boundary and the documented GoIP UDP protocol. It is disabled by default; explicit mock mode uses an actual loopback UDP gateway simulator. See [GoIP SMS setup, protocol details, local API examples, and hardware cutover prerequisites](docs/goip-sms.md). Physical GoIP operation has not been verified.
+SMS is available through an independent provider boundary, the documented GoIP UDP protocol, and a GoIP8 HTTP web form mode based on a separately tested sender. It is disabled by default; explicit mock mode uses an actual loopback UDP gateway simulator. See [GoIP SMS setup, protocol details, local API examples, and hardware cutover prerequisites](docs/goip-sms.md). Physical GoIP operation from this application has not been verified.
 
 ## Architecture
 

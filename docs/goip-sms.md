@@ -74,7 +74,16 @@ Hourly transmission attempts and minimum send intervals are persisted. Queue lim
 
 Content cleanup removes completed SMS content from the SMS tables and their dealership history copies. Completed inbox/outbox IDs expire after ID retention, allowing later ID reuse. **Unknown outbound idempotency tombstones remain indefinitely**, with content removed after content retention, so expiry cannot authorize an uncertain resend. Dead-letter content has the same configured retention; resolve or export failures before expiry. Protect the database volume and backups, and plan disk capacity for retained tombstones.
 
+## Use the tested GoIP8 HTTP sender
+
+The separate `HTTP` mode uses the same Basic Auth web form request as [generic-sms-sender](https://github.com/glenannang/generic-sms-sender): `POST /default/en_US/sms_info.html`. It uses `sms.channels[0].source-address` for `goip.ipaddress`, `auth-id` for `goip.user`, `password` for `goip.pass`, `sim-channel` for `goip.line`, and `sms.session-timeout` for `goip.timeout-seconds`. The tested line is 1. Configure the gateway address and credentials privately through environment variables or an external Spring config file; do not commit them.
+
+The `sms-http` profile maps `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, and optional `SMS_GOIP_TIMEOUT` (default `60s`) into that configuration. Set `SMS_API_TOKEN` and `SMS_ALLOWED_RECIPIENTS` privately too, then run `./mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-http'`. The existing outbound API and durable outbox then apply. The HTTP provider marks an HTTP 200 as `GATEWAY_SENT`, matching the reference sender's success criterion. This confirms only that the gateway web form responded successfully; verify handset delivery separately. Any non-200 response, timeout, or uncertain transport result becomes `UNKNOWN` and is not retried automatically. HTTP mode does not provide UDP inbound SMS or GoIP registration status endpoints.
+
+Set those environment variables in the **same PowerShell terminal** that starts Maven. The `goipconfig.properties` file from the standalone sender is not loaded by this application, and `.env` is not loaded automatically. A missing channel value now reports its field name, such as `Invalid SMS channel auth-id`, without printing credentials.
+
 ## Run the loopback simulator
+
 
 Use a separate PowerShell terminal. The recipient below is fictional and is used only by the in-process loopback simulator:
 

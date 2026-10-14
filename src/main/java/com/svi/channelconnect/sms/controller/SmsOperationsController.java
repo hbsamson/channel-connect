@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ import com.svi.channelconnect.sms.goip.GoipSmsProvider;
 @RestController
 @Profile({"local", "test"})
 @ConditionalOnProperty(name = "sms.enabled", havingValue = "true")
+@ConditionalOnExpression("'${sms.mode:MOCK}' != 'HTTP'")
 @RequestMapping("/api/admin/sms")
 public class SmsOperationsController {
 	private final GoipSmsProvider provider;

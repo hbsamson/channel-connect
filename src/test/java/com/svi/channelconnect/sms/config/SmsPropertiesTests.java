@@ -28,4 +28,10 @@ class SmsPropertiesTests {
 		assertThat(properties.toString()).doesNotContain("test-sms-api-token", "test-password");
 		assertThat(properties.channels().getFirst().toString()).doesNotContain("test-password", "test-id-1");
 	}
+	@Test void identifiesMissingHttpChannelSettingWithoutLeakingCredentials() {
+		assertThatThrownBy(() -> SmsTestProperties.properties(Map.of("sms.channels[0].auth-id", "")))
+				.hasRootCauseMessage("Invalid SMS channel auth-id");
+		assertThatThrownBy(() -> SmsTestProperties.properties(Map.of("sms.channels[0].password", "")))
+				.hasRootCauseMessage("Invalid SMS channel password");
+	}
 }

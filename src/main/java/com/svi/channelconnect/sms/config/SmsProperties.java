@@ -34,7 +34,7 @@ public record SmsProperties(
 		@DefaultValue("30d") Duration contentRetention,
 		@DefaultValue("90d") Duration idRetention,
 		@DefaultValue("10s") Duration shutdownTimeout) {
-	public enum Mode { MOCK, LIVE }
+	public enum Mode { MOCK, LIVE, HTTP }
 
 	public SmsProperties {
 		allowedRecipients = allowedRecipients == null ? Set.of() : Set.copyOf(allowedRecipients);
@@ -67,6 +67,7 @@ public record SmsProperties(
 					|| !(bind.isSiteLocalAddress() || bind.isLoopbackAddress()) || maxSegments != 1)) invalid();
 			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress())) invalid();
 			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> c.maxConcurrentSessions() != 1)) invalid();
+			if (mode == Mode.HTTP && (!liveAuthorized || channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress()))) invalid();
 		}
 		for (String recipient : allowedRecipients) {
 			if (!recipient.matches("\\+639\\d{9}")) invalid();
@@ -98,15 +99,18 @@ public record SmsProperties(
 			String password, String simNumber, @DefaultValue("5s") Duration sendInterval,
 			@DefaultValue("60") int sendsPerHour, @DefaultValue("1") int maxConcurrentSessions) {
 		public Channel {
-			if (accountId == null || !accountId.matches("[A-Za-z0-9_-]{1,64}")
-					|| deviceId == null || !deviceId.matches("[A-Za-z0-9_-]{1,64}") || simChannel < 1 || simChannel > 8
-					|| authId == null || !authId.matches("[A-Za-z0-9_.-]{1,128}")
-					|| password == null || !password.matches("[^\\s;:\\p{Cntrl}]{1,128}")
-					|| sendInterval == null || sendInterval.isNegative() || sendInterval.isZero()
-					|| sendsPerHour < 1 || sendsPerHour > 10000 || maxConcurrentSessions < 1 || maxConcurrentSessions > 5) invalid();
-			address(sourceAddress);
-			if (simNumber != null && !simNumber.isBlank() && !simNumber.matches("\\+639\\d{9}")) invalid();
+			if (accountId == null || !accountId.matches("[A-Za-z0-9_-]{1,64}")) invalidChannel("account-id");
+			if (deviceId == null || !deviceId.matches("[A-Za-z0-9_-]{1,64}")) invalidChannel("device-id");
+			if (simChannel < 1 || simChannel > 8) invalidChannel("sim-channel");
+			if (authId == null || !authId.matches("[A-Za-z0-9_.-]{1,128}")) invalidChannel("auth-id");
+			if (password == null || !password.matches("[^\\s;:\\p{Cntrl}]{1,128}")) invalidChannel("password");
+			if (sendInterval == null || sendInterval.isNegative() || sendInterval.isZero()) invalidChannel("send-interval");
+			if (sendsPerHour < 1 || sendsPerHour > 10000) invalidChannel("sends-per-hour");
+			if (maxConcurrentSessions < 1 || maxConcurrentSessions > 5) invalidChannel("max-concurrent-sessions");
+			try { address(sourceAddress); } catch (IllegalArgumentException exception) { invalidChannel("source-address"); }
+			if (simNumber != null && !simNumber.isBlank() && !simNumber.matches("\\+639\\d{9}")) invalidChannel("sim-number");
 		}
+		private static void invalidChannel(String field) { throw new IllegalArgumentException("Invalid SMS channel " + field); }
 		@Override public String toString() { return "SmsChannel[accountId=" + accountId + ", simChannel=" + simChannel + ", identity=<redacted>]"; }
 	}
 }

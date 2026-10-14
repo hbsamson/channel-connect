@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
@@ -27,6 +28,7 @@ import com.svi.channelconnect.sms.simulator.GoipGatewaySimulator;
 
 @Component
 @ConditionalOnProperty(name = "sms.enabled", havingValue = "true")
+@ConditionalOnExpression("'${sms.mode:MOCK}' != 'HTTP'")
 public class GoipSmsProvider implements SmsProvider, AutoCloseable {
 	private final SmsProperties properties;
 	private final SmsMessageRepository store;
