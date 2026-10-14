@@ -112,7 +112,6 @@ public class SmsMessageRepository {
 				.param(account).query(Long.class).single() <= now - channel.sendInterval().toMillis();
 	}
 	public boolean authorized(SmsOutbound message) {
-		if (!properties.allowedRecipients().contains(message.recipient())) return false;
 		// A customer-initiated reply (including an opt-out acknowledgement) is authorized by its durable receipt.
 		if (message.requestKey().startsWith("reply:")) return true;
 		var identity = customers.identity("SMS", message.accountId(), message.recipient());

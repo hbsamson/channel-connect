@@ -13,7 +13,6 @@ public final class SmsTestProperties {
 	public static SmsProperties properties(Map<String, String> overrides) {
 		Map<String, String> values = new HashMap<>();
 		values.put("sms.enabled", "true"); values.put("sms.api-token", "test-sms-api-token");
-		values.put("sms.allowed-recipients", "+639000000001,+639000000002");
 		for (int i = 0; i < 2; i++) {
 			String prefix = "sms.channels[" + i + "].";
 			values.put(prefix + "account-id", "sim-" + (i + 1)); values.put(prefix + "device-id", "test-device");

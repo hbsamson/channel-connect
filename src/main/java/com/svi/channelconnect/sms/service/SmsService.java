@@ -31,13 +31,12 @@ public class SmsService {
 	public String validate(String account, String recipient, String content) {
 		try { properties.channel(account); } catch (IllegalArgumentException exception) { throw new SmsException(SmsException.Reason.FORBIDDEN); }
 		String normalized = SmsValidation.phone(recipient);
-		if (!properties.allowedRecipients().contains(normalized)) throw new SmsException(SmsException.Reason.FORBIDDEN);
 		SmsValidation.content(content, properties); return normalized;
 	}
 	public boolean canInitiate(String account, String recipient) {
 		try {
-			String normalized = SmsValidation.phone(recipient); properties.channel(account);
-			return properties.allowedRecipients().contains(normalized);
+			SmsValidation.phone(recipient); properties.channel(account);
+			return true;
 		} catch (RuntimeException exception) { return false; }
 	}
 }

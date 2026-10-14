@@ -54,7 +54,6 @@ Spring does not load `.env` automatically. Use environment variables, an externa
 | `SMS_UDP_BIND_ADDRESS`, `SMS_UDP_PORT` | Loopback and ephemeral port; explicit private bind and nonzero port required for live |
 | `SMS_LIVE_AUTHORIZED` | `false`; explicit live configuration gate, not a substitute for deployment approval |
 | `SMS_API_TOKEN` | Required, at least 16 characters, for enabled local/test HTTP API |
-| `SMS_ALLOWED_RECIPIENTS` | Normalized `+639…` allowlist; empty denies all outbound recipients |
 | `SMS_REGISTRATION_TIMEOUT` | `90s` |
 | `SMS_SESSION_TIMEOUT` | `80s`, at most `90s` |
 | `SMS_PACKET_TIMEOUT`, `SMS_POLL_INTERVAL`, `SMS_MAX_POLLS` | `3s`, `3s`, `10` |
@@ -78,9 +77,11 @@ Content cleanup removes completed SMS content from the SMS tables and their deal
 
 The separate `HTTP` mode uses the same Basic Auth web form request as [generic-sms-sender](https://github.com/glenannang/generic-sms-sender): `POST /default/en_US/sms_info.html`. It uses `sms.channels[0].source-address` for `goip.ipaddress`, `auth-id` for `goip.user`, `password` for `goip.pass`, `sim-channel` for `goip.line`, and `sms.session-timeout` for `goip.timeout-seconds`. The tested line is 1. Configure the gateway address and credentials privately through environment variables or an external Spring config file; do not commit them.
 
-The `sms-http` profile maps `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, and optional `SMS_GOIP_TIMEOUT` (default `60s`) into that configuration. Set `SMS_API_TOKEN` and `SMS_ALLOWED_RECIPIENTS` privately too, then run `./mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-http'`. The existing outbound API and durable outbox then apply. The HTTP provider marks an HTTP 200 as `GATEWAY_SENT`, matching the reference sender's success criterion. This confirms only that the gateway web form responded successfully; verify handset delivery separately. Any non-200 response, timeout, or uncertain transport result becomes `UNKNOWN` and is not retried automatically. HTTP mode does not provide UDP inbound SMS or GoIP registration status endpoints.
+The `sms-http` profile maps `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, and optional `SMS_GOIP_TIMEOUT` (default `60s`) into that configuration. Set `SMS_API_TOKEN` privately too, then run `./mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-http'`. The existing outbound API and durable outbox then apply. The HTTP provider marks an HTTP 200 as `GATEWAY_SENT`, matching the reference sender's success criterion. This confirms only that the gateway web form responded successfully; verify handset delivery separately. Any non-200 response, timeout, or uncertain transport result becomes `UNKNOWN` and is not retried automatically. HTTP mode does not provide UDP inbound SMS or GoIP registration status endpoints.
 
 Set those environment variables in the **same PowerShell terminal** that starts Maven. The `goipconfig.properties` file from the standalone sender is not loaded by this application, and `.env` is not loaded automatically. A missing channel value now reports its field name, such as `Invalid SMS channel auth-id`, without printing credentials.
+
+For line 2, start with `local,demo,sms-http-two-lines` instead of `sms-http`. This profile configures `goip-line-1` and `goip-line-2` on one gateway using the same HTTP login. The profile makes no claim that line 2 has been verified on the physical device; test its routing with an approved handset.
 
 ## Run the loopback simulator
 
@@ -91,7 +92,6 @@ Use a separate PowerShell terminal. The recipient below is fictional and is used
 $env:SMS_API_TOKEN = [Guid]::NewGuid().ToString('N')
 $env:SMS_MOCK_AUTH_ID = 'local-sim-1'
 $env:SMS_MOCK_PASSWORD = [Guid]::NewGuid().ToString('N')
-$env:SMS_ALLOWED_RECIPIENTS = '+639000000001'
 $env:AI_PROVIDER = 'mock'
 .\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-mock'
 ```
@@ -116,7 +116,7 @@ The response is `202`, with a `Location` status URL:
 {"messageId":"<application UUID>","status":"QUEUED","replay":false}
 ```
 
-`GET /api/v1/sms/messages/{messageId}` requires the same bearer credential and returns message status, a safe `errorCode` when present, and `handsetDelivery: UNCONFIRMED`. Reusing a key with identical normalized inputs returns the original message and `replay: true`; changed inputs return `409`. Validation returns `400`, unauthorized recipients/accounts return `403`, queue exhaustion returns `503`, and request bodies larger than 16 KiB return `413`.
+`GET /api/v1/sms/messages/{messageId}` requires the same bearer credential and returns message status, a safe `errorCode` when present, and `handsetDelivery: UNCONFIRMED`. Reusing a key with identical normalized inputs returns the original message and `replay: true`; changed inputs return `409`. Validation returns `400`, unknown accounts or revoked customer authorization return `403`, queue exhaustion returns `503`, and request bodies larger than 16 KiB return `413`. The SMS API accepts any valid Philippine mobile number; there is no SMS recipient allowlist. Keep the bearer token private because it can authorize sends to any such number.
 
 HTTP Basic admin authentication protects:
 
@@ -148,7 +148,7 @@ Do not execute this checklist without explicit hardware authorization. No step b
 2. Record current per-channel settings and prepare an operator-owned rollback copy outside source control. Agree exactly which channels may be temporarily reassigned, and who changes/restores them.
 3. Provide private LAN/VPN reachability and firewall rules allowing only approved gateway addresses to the dedicated UDP listener. No public UDP exposure, NAT assumption, or automatic endpoint discovery is permitted. Confirm the application bind address, port, reply path, persistent database volume, restricted credentials, and backup procedures.
 4. Resolve registration IDs, passwords, source ports, SIM numbers, and physical channel mapping with an authorized packet capture. If identities/endpoints cannot distinguish SIMs, stop: automatic replies and live sending must remain disabled.
-5. Configure live mode explicitly using external secrets, `SMS_ENABLED`, a private bind, fixed port, allowlists, and `SMS_LIVE_AUTHORIZED`. The flag only permits configured startup; it does not constitute human approval. A production application still needs its existing durable WhatsApp dispatcher and reviewed production API/administration infrastructure.
+5. Configure live mode explicitly using external secrets, `SMS_ENABLED`, a private bind, fixed port, and `SMS_LIVE_AUTHORIZED`. The flag only permits configured startup; it does not constitute human approval. A production application still needs its existing durable WhatsApp dispatcher and reviewed production API/administration infrastructure.
 6. An authorized operator changes only the agreed test channel's server destination. Verify registration on both server and gateway before any send. Begin with one approved recipient and one GSM-7 message; verify receipt on the handset independently of GoIP `OK`.
 7. Verify each authorized channel's inbound identity and same-SIM reply, Unicode conversion, multiline bodies, recipient normalization, registration expiry/reboot behavior, polling duplicates, timeouts, shutdown/restart recovery, and actual sending limits. Multipart operation remains disabled pending a separately reviewed firmware result.
 8. On unexpected mapping, registration failure, duplicate transmission, or uncertain outcome, disable new work. Preserve the ledger and diagnostic metadata. Do not retry unknown sends. The responsible operator restores the saved destination/settings and confirms the original server's registration before ending the maintenance window.

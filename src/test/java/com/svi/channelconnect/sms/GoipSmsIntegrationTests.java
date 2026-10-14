@@ -34,7 +34,7 @@ import com.svi.channelconnect.messenger.client.MessengerSendClient;
 /** Real UDP sockets, real migrations/transactions, existing AI port mocked; no physical endpoints. */
 @SpringBootTest(properties = {
 		"spring.datasource.url=jdbc:h2:mem:smsintegration;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-		"sms.enabled=true", "sms.mode=MOCK", "sms.api-token=test-sms-api-token", "sms.allowed-recipients=+639000000001,+639000000002",
+		"sms.enabled=true", "sms.mode=MOCK", "sms.api-token=test-sms-api-token",
 		"sms.packet-timeout=500ms", "sms.poll-interval=200ms", "sms.max-polls=2", "sms.session-timeout=4s", "sms.shutdown-timeout=2s",
 		"sms.processing-attempts=2", "sms.processing-retry-delay=10ms", "sms.dispatch-delay-ms=600000", "sms.maintenance-delay-ms=600000",
 		"sms.channels[0].account-id=sim-1", "sms.channels[0].device-id=test-device", "sms.channels[0].sim-channel=1",
@@ -172,8 +172,12 @@ class GoipSmsIntegrationTests {
 		mvc.perform(get("/api/v1/sms/messages/" + id)).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/v1/sms/messages/" + id).header("Authorization", "Bearer test-sms-api-token"))
 				.andExpect(status().isOk()).andExpect(jsonPath("$.handsetDelivery").value("UNCONFIRMED")).andExpect(jsonPath("$.content").doesNotExist());
-		mvc.perform(post("/api/v1/sms/messages").header("Authorization", "Bearer test-sms-api-token").header("Idempotency-Key", "denied")
-				.contentType("application/json").content(request.replace("09000000001", "09000000003"))).andExpect(status().isForbidden());
+		var unrestricted = mvc.perform(post("/api/v1/sms/messages").header("Authorization", "Bearer test-sms-api-token").header("Idempotency-Key", "valid-other-recipient")
+				.contentType("application/json").content(request.replace("09000000001", "09000000003"))).andExpect(status().isAccepted()).andReturn();
+		String unrestrictedId = new tools.jackson.databind.ObjectMapper().readTree(unrestricted.getResponse().getContentAsString()).get("messageId").asString();
+		awaitStatus(unrestrictedId, "GATEWAY_SENT");
+		mvc.perform(post("/api/v1/sms/messages").header("Authorization", "Bearer test-sms-api-token").header("Idempotency-Key", "invalid-recipient")
+				.contentType("application/json").content(request.replace("09000000001", "+63"))).andExpect(status().isBadRequest());
 		mvc.perform(post("/api/v1/sms/messages").header("Authorization", "Bearer test-sms-api-token").header("Idempotency-Key", "http-1")
 				.contentType("application/json").content(request.replace("Protocol test", "Changed"))).andExpect(status().isConflict());
 		mvc.perform(post("/api/v1/sms/messages").header("Authorization", "Bearer test-sms-api-token").contentType("application/json").content(" ".repeat(16385)))

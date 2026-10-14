@@ -34,4 +34,10 @@ class SmsPropertiesTests {
 		assertThatThrownBy(() -> SmsTestProperties.properties(Map.of("sms.channels[0].password", "")))
 				.hasRootCauseMessage("Invalid SMS channel password");
 	}
+	@Test void httpLinesMayShareGatewayLogin() {
+		var properties = SmsTestProperties.properties(Map.of("sms.mode", "HTTP", "sms.live-authorized", "true",
+				"sms.channels[0].source-address", "192.168.13.193", "sms.channels[1].source-address", "192.168.13.193",
+				"sms.channels[1].auth-id", "test-id-1"));
+		assertThat(properties.channels()).extracting(SmsProperties.Channel::accountId).containsExactly("sim-1", "sim-2");
+	}
 }

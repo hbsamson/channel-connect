@@ -17,7 +17,6 @@ public record SmsProperties(
 		@DefaultValue("0") int port,
 		@DefaultValue("false") boolean liveAuthorized,
 		@DefaultValue("") String apiToken,
-		Set<String> allowedRecipients,
 		List<Channel> channels,
 		@DefaultValue("90s") Duration registrationTimeout,
 		@DefaultValue("80s") Duration sessionTimeout,
@@ -37,7 +36,6 @@ public record SmsProperties(
 	public enum Mode { MOCK, LIVE, HTTP }
 
 	public SmsProperties {
-		allowedRecipients = allowedRecipients == null ? Set.of() : Set.copyOf(allowedRecipients);
 		channels = channels == null ? List.of() : List.copyOf(channels);
 		if (mode == null || port < 0 || port > 65535 || maxSessions < 1 || maxSessions > 5
 				|| queueCapacity < 1 || queueCapacity > 100000 || maxContentBytes < 1 || maxContentBytes > 3000
@@ -55,7 +53,7 @@ public record SmsProperties(
 			Set<String> simMappings = new HashSet<>();
 			java.util.Map<String, String> deviceAddresses = new java.util.HashMap<>();
 			for (Channel channel : channels) {
-				if (!accounts.add(channel.accountId()) || !identities.add(address(channel.sourceAddress()).getHostAddress() + "/" + channel.authId())
+				if (!accounts.add(channel.accountId()) || (mode != Mode.HTTP && !identities.add(address(channel.sourceAddress()).getHostAddress() + "/" + channel.authId()))
 						|| !simMappings.add(channel.deviceId() + "/" + channel.simChannel())) invalid();
 				String previous = deviceAddresses.putIfAbsent(channel.deviceId(), address(channel.sourceAddress()).getHostAddress());
 				if (previous != null && !previous.equals(address(channel.sourceAddress()).getHostAddress())) invalid();
@@ -68,9 +66,6 @@ public record SmsProperties(
 			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress())) invalid();
 			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> c.maxConcurrentSessions() != 1)) invalid();
 			if (mode == Mode.HTTP && (!liveAuthorized || channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress()))) invalid();
-		}
-		for (String recipient : allowedRecipients) {
-			if (!recipient.matches("\\+639\\d{9}")) invalid();
 		}
 	}
 
