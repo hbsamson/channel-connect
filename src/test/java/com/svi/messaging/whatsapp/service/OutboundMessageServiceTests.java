@@ -9,15 +9,17 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
-import com.svi.messaging.whatsapp.client.WhatsAppApiClient;
-import com.svi.messaging.whatsapp.config.OutboundMessagingProperties;
-import com.svi.messaging.whatsapp.dto.request.OutboundTemplateMessageRequest;
-import com.svi.messaging.whatsapp.exception.DuplicateOutboundSubmissionException;
-import com.svi.messaging.common.exception.ExternalFailureCategory;
-import com.svi.messaging.whatsapp.exception.InvalidOutboundRequestException;
-import com.svi.messaging.whatsapp.exception.OutboundAuthorizationException;
-import com.svi.messaging.whatsapp.exception.OutboundCapacityException;
-import com.svi.messaging.whatsapp.exception.WhatsAppApiException;
+import com.svi.channelconnect.whatsapp.messaging.common.exception.ExternalFailureCategory;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.client.WhatsAppApiClient;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.config.OutboundMessagingProperties;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.dto.request.OutboundTemplateMessageRequest;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.DuplicateOutboundSubmissionException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.InvalidOutboundRequestException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.OutboundAuthorizationException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.OutboundCapacityException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.WhatsAppApiException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.InMemoryOutboundIdempotencyStore;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.OutboundMessageService;
 import com.svi.messaging.support.TestProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

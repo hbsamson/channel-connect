@@ -7,6 +7,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.svi.channelconnect.whatsapp.messaging.ai.client.AiClient;
+import com.svi.channelconnect.whatsapp.messaging.ai.client.OpenAiApiClient;
+
 @SpringBootTest(properties = {
 		"ai.provider=openai",
 		"ai.api-key=test-openai-key",

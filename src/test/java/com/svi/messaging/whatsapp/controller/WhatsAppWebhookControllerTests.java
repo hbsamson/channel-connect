@@ -16,10 +16,11 @@ import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-import com.svi.messaging.whatsapp.exception.GlobalExceptionHandler;
-import com.svi.messaging.whatsapp.security.WebhookRequestSizeFilter;
-import com.svi.messaging.whatsapp.security.WebhookSignatureVerifier;
-import com.svi.messaging.whatsapp.service.WhatsAppWebhookService;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.controller.WhatsAppWebhookController;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.GlobalExceptionHandler;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.security.WebhookRequestSizeFilter;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.security.WebhookSignatureVerifier;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.WhatsAppWebhookService;
 import com.svi.messaging.support.TestProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

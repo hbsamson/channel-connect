@@ -12,10 +12,12 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import com.svi.messaging.whatsapp.exception.MalformedWebhookException;
-import com.svi.messaging.whatsapp.mapper.WhatsAppMessageMapper;
-import com.svi.messaging.whatsapp.model.DispatchResult;
-import com.svi.messaging.whatsapp.model.InboundMessage;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.MalformedWebhookException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.mapper.WhatsAppMessageMapper;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.model.DispatchResult;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.model.InboundMessage;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.InboundMessageDispatcher;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.WhatsAppWebhookService;
 import com.svi.messaging.support.TestProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;

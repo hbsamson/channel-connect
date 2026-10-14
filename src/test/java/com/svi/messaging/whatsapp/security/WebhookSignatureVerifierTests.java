@@ -8,6 +8,7 @@ import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.security.WebhookSignatureVerifier;
 import com.svi.messaging.support.TestProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

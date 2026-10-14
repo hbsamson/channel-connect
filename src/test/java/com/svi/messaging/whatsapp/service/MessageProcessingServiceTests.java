@@ -8,14 +8,17 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 
-import com.svi.messaging.ai.client.AiClient;
-import com.svi.messaging.whatsapp.client.WhatsAppApiClient;
-import com.svi.messaging.ai.exception.AiClientException;
-import com.svi.messaging.ai.dto.AiRequest;
-import com.svi.messaging.ai.dto.AiResponse;
-import com.svi.messaging.whatsapp.model.InboundMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import com.svi.channelconnect.whatsapp.messaging.ai.client.AiClient;
+import com.svi.channelconnect.whatsapp.messaging.ai.dto.AiRequest;
+import com.svi.channelconnect.whatsapp.messaging.ai.dto.AiResponse;
+import com.svi.channelconnect.whatsapp.messaging.ai.exception.AiClientException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.client.WhatsAppApiClient;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.model.InboundMessage;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.MessageProcessingService;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.WhatsAppMessagingChannel;
 
 class MessageProcessingServiceTests {
 	private AiClient aiClient;
@@ -27,7 +30,8 @@ class MessageProcessingServiceTests {
 	void setUp() {
 		aiClient = mock(AiClient.class);
 		whatsAppApiClient = mock(WhatsAppApiClient.class);
-		service = new MessageProcessingService(aiClient, whatsAppApiClient);
+		service = new MessageProcessingService(new com.svi.channelconnect.whatsapp.messaging.common.service.MessagingApplicationHandler(
+				java.util.List.of(new WhatsAppMessagingChannel(whatsAppApiClient)), aiClient));
 		message = new InboundMessage(
 				"wamid.1", "15551234567", "15551234567", "Hello", Instant.EPOCH);
 	}

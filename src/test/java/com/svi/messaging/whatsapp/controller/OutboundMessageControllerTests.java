@@ -10,14 +10,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.svi.messaging.whatsapp.dto.request.OutboundTemplateMessageRequest;
-import com.svi.messaging.whatsapp.dto.response.OutboundMessageResponse;
-import com.svi.messaging.common.exception.ExternalFailureCategory;
-import com.svi.messaging.whatsapp.exception.GlobalExceptionHandler;
-import com.svi.messaging.whatsapp.exception.OutboundAuthorizationException;
-import com.svi.messaging.whatsapp.exception.WhatsAppApiException;
-import com.svi.messaging.whatsapp.security.LocalOutboundAuthorizationInterceptor;
-import com.svi.messaging.whatsapp.service.OutboundMessageService;
+import com.svi.channelconnect.whatsapp.messaging.common.exception.ExternalFailureCategory;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.controller.OutboundMessageController;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.dto.request.OutboundTemplateMessageRequest;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.dto.response.OutboundMessageResponse;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.GlobalExceptionHandler;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.OutboundAuthorizationException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.WhatsAppApiException;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.security.LocalOutboundAuthorizationInterceptor;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.OutboundMessageService;
 import com.svi.messaging.support.TestProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

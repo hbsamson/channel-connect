@@ -2,7 +2,8 @@ package com.svi.messaging.ai.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.svi.messaging.ai.dto.AiRequest;
+import com.svi.channelconnect.whatsapp.messaging.ai.client.MockAiClient;
+import com.svi.channelconnect.whatsapp.messaging.ai.dto.AiRequest;
 import com.svi.messaging.support.TestProperties;
 import org.junit.jupiter.api.Test;
 

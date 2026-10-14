@@ -18,9 +18,10 @@ import java.time.Duration;
 import java.util.List;
 
 import com.sun.net.httpserver.HttpServer;
-import com.svi.messaging.whatsapp.config.WhatsAppProperties;
-import com.svi.messaging.common.exception.ExternalFailureCategory;
-import com.svi.messaging.whatsapp.exception.WhatsAppApiException;
+import com.svi.channelconnect.whatsapp.messaging.common.exception.ExternalFailureCategory;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.client.WhatsAppApiClient;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.config.WhatsAppProperties;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.exception.WhatsAppApiException;
 import com.svi.messaging.support.TestProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

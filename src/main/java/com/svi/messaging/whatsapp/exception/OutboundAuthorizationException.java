@@ -1,7 +1,0 @@
-package com.svi.messaging.whatsapp.exception;
-
-public class OutboundAuthorizationException extends RuntimeException {
-	public OutboundAuthorizationException() {
-		super("Outbound request is not permitted");
-	}
-}

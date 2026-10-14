@@ -13,8 +13,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import com.svi.messaging.whatsapp.model.DispatchResult;
-import com.svi.messaging.whatsapp.model.InboundMessage;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.model.DispatchResult;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.model.InboundMessage;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.InMemoryInboundMessageDispatcher;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.service.MessageProcessingService;
 import com.svi.messaging.support.TestProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;

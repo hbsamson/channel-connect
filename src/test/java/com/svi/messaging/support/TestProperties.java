@@ -4,10 +4,10 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Set;
 
-import com.svi.messaging.ai.config.AiProperties;
-import com.svi.messaging.whatsapp.config.DispatchProperties;
-import com.svi.messaging.whatsapp.config.OutboundMessagingProperties;
-import com.svi.messaging.whatsapp.config.WhatsAppProperties;
+import com.svi.channelconnect.whatsapp.messaging.ai.config.AiProperties;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.config.DispatchProperties;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.config.OutboundMessagingProperties;
+import com.svi.channelconnect.whatsapp.messaging.whatsapp.config.WhatsAppProperties;
 
 public final class TestProperties {
 	private TestProperties() {
