@@ -43,10 +43,12 @@ public class DealershipAssistant {
 		Workflow state = store.workflow(customerId);
 		Map<String, Object> context = new HashMap<>();
 		context.put("workflow", state);
+		context.put("workflowStage", state.stage());
 		context.put("history", store.history(customerId, properties.historyLimit()));
 		context.put("summary", store.summary(customerId));
 		context.put("catalog", config.catalog());
 		context.put("appointment", store.appointment(customerId).orElse(null));
+		context.put("representativeRequest", store.representativeRequest(customerId, null).orElse(null));
 		CampaignConfiguration campaign = store.activeCampaign(customerId).orElse(config.campaign());
 		context.put("campaign", campaign);
 		if (verified) {
@@ -64,6 +66,48 @@ public class DealershipAssistant {
 		state = new Workflow(state.stage(), state.serviceId(), state.date(), state.time(), language);
 		var values = scripts.values(customer, properties.name(), serviceName(state.serviceId()), null);
 		String action = intent.intent();
+		if (action.equals("SERVICES")) {
+			String offerings = config.catalog().services().values().stream().map(DemoConfiguration.Service::name)
+					.limit(5).collect(java.util.stream.Collectors.joining(", "));
+			return new Answer(local(language, "Our configured demo services include " + offerings + ". Which service would you like help with po?",
+					"Kasama sa demo services namin ang " + offerings + ". Aling service ang gusto ninyo po?"), state);
+		}
+		if (action.equals("REQUEST_STATUS")) {
+			var reference = java.util.regex.Pattern.compile("(?i)\\bREQ-[A-Z0-9]{16}\\b").matcher(message);
+			String requestedTracking = reference.find() ? reference.group().toUpperCase(java.util.Locale.ROOT) : null;
+			var request = store.representativeRequest(customerId, requestedTracking);
+			if (request.isPresent()) return new Answer(requestStatus(request.get(), language), state);
+			if (requestedTracking != null) return new Answer(local(language,
+					"I couldn't find that tracking number in your conversation po. Could you check the reference?",
+					"Hindi ko makita ang tracking number na iyon sa conversation ninyo po. Paki-check po ang reference."), state);
+			return new Answer(local(language, "I haven't recorded a representative request in this conversation yet po. Would you like me to record one?",
+					"Wala pa pong naitalang request para sa representative sa conversation na ito. Gusto po ba ninyong mag-record tayo?"),
+					new Workflow("HANDOFF_CONFIRM", state.serviceId(), state.date(), state.time(), language));
+		}
+		if (action.equals("VERIFY_HELP") || action.equals("CLARIFY") && state.stage().equals("VERIFY_REQUIRED")) {
+			return new Answer(local(language,
+					"A dealership representative needs to verify that this account belongs to you before I access customer records or confirm a booking po. Would you like me to record a request for help with verification?",
+					"Kailangang i-verify ng representative na sa inyo ang account bago makita ang customer record o makumpirma ang booking po. Gusto po ba ninyong mag-record tayo ng request para sa verification?"),
+					new Workflow("VERIFY_REQUIRED", state.serviceId(), state.date(), state.time(), language));
+		}
+		if (action.equals("CLARIFY")) {
+			if (state.stage().equals("CANCEL_CONFIRM")) return new Answer(local(language,
+					"I'm asking whether you want to cancel your current demo appointment po. Should I cancel it?",
+					"Tinatanong ko po kung gusto ninyong i-cancel ang kasalukuyang demo appointment. I-cancel ko po ba?"), state);
+			if (java.util.Set.of("BOOK", "RESCHEDULE").contains(state.stage())) return new Answer(local(language,
+					"We're choosing a date and time for your demo visit po. What schedule would you prefer?",
+					"Pumipili tayo ng petsa at oras para sa demo visit ninyo po. Anong schedule ang gusto ninyo?"), state);
+			if (state.stage().equals("HANDOFF_CONFIRM")) return new Answer(local(language,
+					"I'm offering to record a request for a representative to help with your inquiry po. Would you like me to do that?",
+					"Maaari po akong mag-record ng request para tulungan kayo ng representative. Gusto po ba ninyo?"), state);
+			if (state.stage().equals("HANDOFF_REQUESTED")) {
+				var request = store.representativeRequest(customerId, null);
+				if (request.isPresent()) return new Answer(local(language, "Sorry, that wasn't clear po. ", "Pasensya po, hindi malinaw ang sagot ko. ")
+						+ requestStatus(request.get(), language), state);
+			}
+			return new Answer(local(language, "I didn't fully understand your request po. Could you rephrase it?",
+					"Hindi ko lubos na naintindihan ang request ninyo po. Maaari po bang sabihin ninyo ito sa ibang paraan?"), state);
+		}
 		if (action.equals("OPT_OUT")) {
 			store.optOut(customerId, clock.millis());
 			return new Answer(scripts.render(campaign, "optout", language, values), new Workflow("IDLE", state.serviceId(), null, null, language));
@@ -74,10 +118,15 @@ public class DealershipAssistant {
 			if (config.catalog().privacyContact() != null) reply += " " + config.catalog().privacyContact();
 			return new Answer(reply, state);
 		}
-		if (action.equals("HANDOFF") || state.stage().equals("HANDOFF_CONFIRM") && action.equals("CONFIRM")) {
-			store.event(customerId, null, "HUMAN_HANDOFF_REQUESTED", clock.millis());
+		if (action.equals("HANDOFF") || java.util.Set.of("HANDOFF_CONFIRM", "VERIFY_REQUIRED", "HANDOFF_REQUESTED").contains(state.stage()) && action.equals("CONFIRM")) {
+			RepresentativeRequest request = store.recordRepresentativeRequest(customerId, state, clock.millis());
 			store.executionStatus(customerId, "COMPLETED");
-			return new Answer(scripts.render(campaign, "handoff", language, values), new Workflow("IDLE", state.serviceId(), state.date(), state.time(), language));
+			values.put("tracking_number", request.trackingNumber());
+			values.put("request_status", request.status().toLowerCase(java.util.Locale.ROOT).replace('_', ' '));
+			String reply = scripts.render(campaign, "handoff", language, values);
+			if (!reply.contains(request.trackingNumber())) reply += " Tracking number: " + request.trackingNumber() + "; status: " + values.get("request_status") + ".";
+			return new Answer(reply,
+					new Workflow("HANDOFF_REQUESTED", state.serviceId(), state.date(), state.time(), language));
 		}
 		if (action.equals("INQUIRY")) {
 			return new Answer(local(language, "Those details need confirmation from the dealership po. Would you like me to record a request for a representative?",
@@ -85,8 +134,10 @@ public class DealershipAssistant {
 					new Workflow("HANDOFF_CONFIRM", state.serviceId(), state.date(), state.time(), language));
 		}
 		if (!verified && java.util.Set.of("BOOK", "RESCHEDULE", "CANCEL", "DUE", "CONFIRM").contains(action)) {
-			return new Answer(local(language, "Please ask the demo administrator to verify and link this account before accessing customer records or appointments po.",
-					"Paki-request po sa demo administrator na i-verify at i-link ang account ninyo bago tingnan ang customer record o appointment."), state);
+			return new Answer(local(language, "I can help plan your visit po. A dealership representative needs to verify this account before I access customer records or confirm a booking; would you like me to record a request for help?",
+					"Makakatulong po ako sa pagplano ng visit ninyo. Kailangang i-verify muna ng representative ang account bago makita ang customer record o makumpirma ang booking; gusto po ba ninyong mag-record tayo ng request para sa tulong?"),
+					new Workflow("VERIFY_REQUIRED", intent.serviceId() == null ? state.serviceId() : intent.serviceId(),
+							intent.date() == null ? state.date() : intent.date(), intent.time() == null ? state.time() : intent.time(), language));
 		}
 		if (action.equals("HOURS")) return new Answer(config.catalog().hours(), state);
 		if (action.equals("LOCATION")) return new Answer(config.catalog().location(), state);
@@ -128,7 +179,8 @@ public class DealershipAssistant {
 			return new Answer(scripts.render(campaign, "cancellation", language, values), new Workflow("IDLE", state.serviceId(), null, null, language));
 		}
 		if (!verified) return new Answer(scripts.render(campaign, "redirect", language, values), state);
-		if (action.equals("BOOK") || action.equals("RESCHEDULE") || action.equals("CONFIRM") || action.equals("CONTINUE") && !state.stage().equals("IDLE")) {
+		if (action.equals("BOOK") || action.equals("RESCHEDULE") || action.equals("CONFIRM")
+				|| action.equals("CONTINUE") && java.util.Set.of("BOOK", "RESCHEDULE").contains(state.stage())) {
 			return appointment(customerId, customer, state, intent, campaign);
 		}
 		return new Answer(scripts.render(campaign, "redirect", language, values), state);
@@ -165,6 +217,13 @@ public class DealershipAssistant {
 	private String serviceName(String id) {
 		var service = config.catalog().services().get(id);
 		return service == null ? "service" : service.name();
+	}
+	private String requestStatus(RepresentativeRequest request, String language) {
+		String status = request.status().toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+		return local(language, "Your request ", "Ang request ninyo na ") + request.trackingNumber()
+				+ local(language, " is recorded po, with status ", " ay naitala na po, na may status ") + status
+				+ local(language, ". This demo does not automatically notify a person; the tracking number lets you follow up here.",
+						". Walang automatic notification sa tao sa demo; magagamit ninyo ang tracking number para mag-follow up dito.");
 	}
 	private String local(String language, String english, String filipino) { return "tl".equals(language) ? filipino : english; }
 	private String date(long at) { return Instant.ofEpochMilli(at).atZone(MANILA).toLocalDate().toString(); }

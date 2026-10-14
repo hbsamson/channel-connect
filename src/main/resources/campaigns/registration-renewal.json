@@ -34,7 +34,7 @@
 		"rescheduling": "Your demo appointment has been moved to {{appointment_time}} po.",
 		"cancellation": "Your demo appointment has been cancelled po.",
 		"privacy": "This automated reminder uses the customer record configured for this demo po. I can record a request for a representative, or stop future reminders.",
-		"handoff": "I've recorded your request for a dealership representative po. A person has not been notified automatically.",
+		"handoff": "I've recorded your request for a dealership representative po. Tracking number: {{tracking_number}}. Status: {{request_status}}; this demo does not automatically notify a person.",
 		"closing": "Thank you po! You can message here for help with dealership services.",
 		"redirect": "I can help with registration renewals, dealership services, and appointments po. What would you like to check?",
 		"optout": "I've stopped campaign reminders across your linked channels po."
@@ -46,7 +46,7 @@
 		"rescheduling": "Nailipat na ang demo appointment ninyo sa {{appointment_time}} po.",
 		"cancellation": "Cancelled na ang demo appointment ninyo po.",
 		"privacy": "Galing sa customer record na naka-configure para sa demo ang reminder na ito po. Maaari tayong mag-request ng representative o itigil ang reminders.",
-		"handoff": "Naitala ko na ang request ninyo para sa representative po. Wala pang taong awtomatikong na-notify.",
+		"handoff": "Naitala ko na ang request ninyo para sa representative po. Tracking number: {{tracking_number}}. Status: {{request_status}}; walang automatic notification sa tao sa demo.",
 		"redirect": "Makakatulong ako sa registration renewal, dealership services, at appointments po. Ano ang gusto ninyong malaman?",
 		"optout": "Itinigil ko na ang campaign reminders sa lahat ng linked channels ninyo po.",
 		"closing": "Salamat po! Message lang para sa tulong sa dealership services."

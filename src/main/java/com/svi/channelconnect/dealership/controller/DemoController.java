@@ -54,7 +54,7 @@ public class DemoController {
 	@GetMapping("/customers/{id}")
 	public CustomerView customer(@PathVariable String id) {
 		return new CustomerView(store.customer(id), store.optedOut(id), store.identities(id), store.workflow(id),
-				store.summary(id), store.history(id, 100), store.appointment(id).orElse(null), store.attempts(id), store.events(id));
+				store.summary(id), store.history(id, 100), store.appointment(id).orElse(null), store.attempts(id), store.events(id), store.representativeRequest(id, null).orElse(null));
 	}
 	@PostMapping("/customers/{id}/identities")
 	public CustomerView link(@PathVariable String id, @Valid @RequestBody LinkIdentity identity) {
@@ -95,5 +95,5 @@ public class DemoController {
 			boolean verified, boolean consent, boolean outboundAllowed) { }
 	public record CustomerView(CustomerProfile customer, boolean optedOut, List<ChannelIdentity> identities,
 			Workflow workflow, String summary, List<ConversationMessage> messages, Appointment appointment,
-			List<DealershipRepository.Attempt> attempts, List<DealershipRepository.Event> events) { }
+			List<DealershipRepository.Attempt> attempts, List<DealershipRepository.Event> events, RepresentativeRequest representativeRequest) { }
 }

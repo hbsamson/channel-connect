@@ -98,6 +98,10 @@ public class DealershipRepository {
 				}
 				db.sql("UPDATE dealer_messages SET customer_id = ? WHERE customer_id = ?")
 						.params(identity.customerId(), existing.get().customerId()).update();
+				db.sql("UPDATE dealer_requests SET customer_id = ? WHERE customer_id = ?")
+						.params(identity.customerId(), existing.get().customerId()).update();
+				db.sql("UPDATE dealer_events SET customer_id = ? WHERE customer_id = ?")
+						.params(identity.customerId(), existing.get().customerId()).update();
 			}
 			db.sql("UPDATE dealer_identities SET customer_id = ?, verified = ?, consent = ?, outbound_allowed = ? WHERE channel = ? AND account_id = ? AND external_id = ?")
 					.params(identity.customerId(), true, identity.consent(), identity.outboundAllowed(), identity.channel(), identity.accountId(), identity.externalId()).update();
@@ -333,13 +337,31 @@ public class DealershipRepository {
 		return db.sql("SELECT sequence, event_type, occurred_at FROM dealer_events WHERE customer_id = ? ORDER BY sequence DESC LIMIT 100")
 				.param(customer).query(Event.class).list();
 	}
+	public boolean hasHandoffRequest(String customer) {
+		return representativeRequest(customer, null).isPresent();
+	}
+	public Optional<RepresentativeRequest> representativeRequest(String customer, String tracking) {
+		return db.sql("SELECT tracking_number, status, service_id, requested_date, requested_time, created_at FROM dealer_requests WHERE customer_id = ? AND (? IS NULL OR tracking_number = ?) ORDER BY created_at DESC, tracking_number LIMIT 1")
+				.params(customer, tracking, tracking).query(RepresentativeRequest.class).optional();
+	}
+	@Transactional
+	public RepresentativeRequest recordRepresentativeRequest(String customer, Workflow workflow, long now) {
+		db.sql("SELECT id FROM dealer_customers WHERE id = ? FOR UPDATE").param(customer).query(String.class).single();
+		var pending = representativeRequest(customer, null).filter(r -> r.status().equals("PENDING_REVIEW"));
+		if (pending.isPresent()) return pending.get();
+		String tracking = "REQ-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase(java.util.Locale.ROOT);
+		db.sql("INSERT INTO dealer_requests(tracking_number, customer_id, status, service_id, requested_date, requested_time, created_at) VALUES (?, ?, 'PENDING_REVIEW', ?, ?, ?, ?)")
+				.params(tracking, customer, workflow.serviceId(), workflow.date(), workflow.time(), now).update();
+		event(customer, null, "HUMAN_HANDOFF_REQUESTED", now);
+		return representativeRequest(customer, tracking).orElseThrow();
+	}
 	public List<Attempt> attempts(String customer) {
 		return db.sql("SELECT a.id, a.execution_id, a.channel, a.attempt_number, a.script_key, a.status, a.attempted_at FROM dealer_attempts a JOIN dealer_executions e ON e.id = a.execution_id WHERE e.customer_id = ? ORDER BY a.attempted_at, a.channel, a.attempt_number")
 				.param(customer).query(Attempt.class).list();
 	}
 	@Transactional
 	public void reset() {
-		for (String table : List.of("dealer_events", "dealer_attempts", "dealer_channel_progress", "dealer_executions", "dealer_messages", "dealer_appointments", "dealer_slots", "dealer_conversations", "dealer_identities", "dealer_customers")) {
+		for (String table : List.of("dealer_events", "dealer_requests", "dealer_attempts", "dealer_channel_progress", "dealer_executions", "dealer_messages", "dealer_appointments", "dealer_slots", "dealer_conversations", "dealer_identities", "dealer_customers")) {
 			db.sql("DELETE FROM " + table).update();
 		}
 	}

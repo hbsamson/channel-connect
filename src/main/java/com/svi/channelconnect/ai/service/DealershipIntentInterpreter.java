@@ -26,7 +26,7 @@ import com.svi.channelconnect.ai.dto.DealershipIntent;
 public class DealershipIntentInterpreter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DealershipIntentInterpreter.class);
 	private static final Set<String> INTENTS = Set.of("BOOK", "RESCHEDULE", "CANCEL", "CONFIRM", "DECLINE", "OPT_OUT",
-			"PRIVACY", "HANDOFF", "PRICE", "PACKAGES", "HOURS", "LOCATION", "DUE", "AVAILABILITY", "INQUIRY", "CONTINUE", "OUT_OF_SCOPE");
+			"PRIVACY", "HANDOFF", "REQUEST_STATUS", "VERIFY_HELP", "SERVICES", "CLARIFY", "PRICE", "PACKAGES", "HOURS", "LOCATION", "DUE", "AVAILABILITY", "INQUIRY", "CONTINUE", "OUT_OF_SCOPE");
 	private final AiClient client;
 	private final AiProperties properties;
 	private final ObjectMapper json;
@@ -41,20 +41,33 @@ public class DealershipIntentInterpreter {
 
 	public DealershipIntent interpret(String id, String text, String instructions, Map<String, Object> context) {
 		DealershipIntent fallback = parse(text);
-		if (fallback.intent().equals("OPT_OUT") || isUnsafeTopic(text) || properties.provider() == AiProperties.Provider.MOCK) return fallback;
+		String stage = String.valueOf(context.getOrDefault("workflowStage", "IDLE"));
+		if (fallback.intent().equals("OUT_OF_SCOPE") && stage.equals("HANDOFF_REQUESTED") && !isUnsafeTopic(text)
+				&& text.toLowerCase(Locale.ROOT).matches("(?s).*(notifi|notified|understand|mean|what+t?|huh|\\?\\?).*")) {
+			fallback = new DealershipIntent("CLARIFY", null, null, null, fallback.language());
+		}
+		if (fallback.intent().equals("OPT_OUT") || isUnsafeTopic(text)) return fallback;
+		if (properties.provider() == AiProperties.Provider.MOCK) return uncertainFallback(fallback);
+		if (Set.of("SERVICES", "REQUEST_STATUS", "VERIFY_HELP", "CLARIFY").contains(fallback.intent())
+				|| Set.of("HANDOFF_CONFIRM", "VERIFY_REQUIRED", "CANCEL_CONFIRM").contains(stage)
+				&& Set.of("CONFIRM", "DECLINE").contains(fallback.intent())) return fallback;
 		try {
 			String response = client.generateResponse(new AiRequest(id,
 					json.writeValueAsString(Map.of("currentDateManila", today().toString(), "context", context, "customerMessage", text)), instructions, true)).text();
 			DealershipIntent intent = json.readValue(response, DealershipIntent.class);
-			if (!INTENTS.contains(intent.intent()) || !Set.of("en", "tl").contains(intent.language())) return fallback;
+			if (!INTENTS.contains(intent.intent()) || !Set.of("en", "tl").contains(intent.language())) return uncertainFallback(fallback);
 			if (intent.date() != null) LocalDate.parse(intent.date());
 			if (intent.time() != null) LocalTime.parse(intent.time());
-			if (intent.serviceId() != null && !Set.of("registration", "pms", "2-in-1", "3-in-1", "custom").contains(intent.serviceId())) return fallback;
+			if (intent.serviceId() != null && !Set.of("registration", "pms", "2-in-1", "3-in-1", "custom").contains(intent.serviceId())) return uncertainFallback(fallback);
 			return intent;
 		} catch (RuntimeException exception) {
 			LOGGER.warn("Dealership AI interpretation unavailable; using deterministic demo parser");
-			return fallback;
+			return uncertainFallback(fallback);
 		}
+	}
+	private DealershipIntent uncertainFallback(DealershipIntent fallback) {
+		return fallback.intent().equals("OUT_OF_SCOPE")
+				? new DealershipIntent("CLARIFY", null, null, null, fallback.language()) : fallback;
 	}
 
 	public DealershipIntent parse(String raw) {
@@ -90,11 +103,15 @@ public class DealershipIntentInterpreter {
 		String intent;
 		if (text.matches("(?s).*(\\bstop\\b|unsubscribe|opt.?out|do not contact|don't contact|no more messages|no more reminders|huwag.*(contact|message)|ayaw.*reminder).*")) intent = "OPT_OUT";
 		else if (isUnsafeTopic(text)) intent = "OUT_OF_SCOPE";
+		else if (text.matches("(?s).*(\\breq-[a-z0-9]{16}\\b|tracking|reference number|where.*request|request.*status|what.*happen.*request|did.*record.*request|follow.*up.*request).*")) intent = "REQUEST_STATUS";
+		else if (text.matches("(?s).*(how.*(verify|link)|verification|verify.*account|link.*account).*")) intent = "VERIFY_HELP";
+		else if (text.matches("[?!]+|(?:what+|huh|pardon|sorry|how can i do that|how do i do that|what do you mean)[?! .]*")) intent = "CLARIFY";
 		else if (text.matches("(?s).*(privacy|personal data|my information|got my|my number|why.*contact|bakit.*(contact|message)).*")) intent = "PRIVACY";
 		else if (text.matches("(?s).*(human|representative|agent|tao|kausap).*")) intent = "HANDOFF";
 		else if (text.matches("(?s).*(cancel|kansel).*")) intent = "CANCEL";
-		else if (text.matches("(?s).*(reschedul|move|change|instead|lipat|palit).*")) intent = "RESCHEDULE";
+		else if (text.matches("(?s).*(reschedule|move|change|instead|lipat|palit).*")) intent = "RESCHEDULE";
 		else if (text.matches("(?s).*(price|cost|how much|magkano|discount).*")) intent = "PRICE";
+		else if (service == null && text.matches("(?s).*(what|which|ano|anong).*(services?|offer|packages?).*")) intent = "SERVICES";
 		else if (text.matches("(?s).*(package|inclusion|2-in-1|3-in-1|offerings).*")) intent = "PACKAGES";
 		else if (text.matches("(?s).*(hours|open|close|bukas.*oras).*")) intent = "HOURS";
 		else if (text.matches("(?s).*(location|address|where.*branch|saan).*")) intent = "LOCATION";
@@ -102,8 +119,8 @@ public class DealershipIntentInterpreter {
 		else if (text.matches("(?s).*(available|availability|what.*schedule|anong.*schedule).*")) intent = "AVAILABILITY";
 		else if (text.matches("(?s).*(book|appointment|schedule|visit).*")) intent = "BOOK";
 		else if (text.matches("(?s).*(registration|renewal|insurance|ctpl|requirements|dealership|payment|service|vehicle|rehistro).*")) intent = "INQUIRY";
-		else if (text.matches("(yes|yes po|opo|oo|sige|okay|ok|confirm|yes please)[.! ]*")) intent = "CONFIRM";
-		else if (text.matches("(no|no thanks|no thank you|not interested|hindi)[.! ]*")) intent = "DECLINE";
+		else if (text.replace(',', ' ').replaceAll("\\s+", " ").matches("(yes(?: please| po)?|sure(?: go| go ahead| please)?|go ahead|please do|do it|opo|oo|sige(?: po| na)?|okay(?: go| go ahead| please)?|ok(?: go| please)?|confirm|sounds good|absolutely)[.! ]*")) intent = "CONFIRM";
+		else if (text.matches("(no|nope|not now|no thanks|no thank you|not interested|hindi)[.! ]*")) intent = "DECLINE";
 		else if (date != null || time != null || text.matches("(hi|hello|hello po|thanks|thank you|salamat po)[.! ]*")) intent = "CONTINUE";
 		else intent = "OUT_OF_SCOPE";
 		return new DealershipIntent(intent, date, time, service, language);

@@ -178,6 +178,74 @@ class DealershipDemoTests {
 		assertThat(store.events("demo-renewal")).extracting(DealershipRepository.Event::eventType).contains("HUMAN_HANDOFF_REQUESTED");
 	}
 	@Test
+	void unlinkedMessengerConversationExplainsVerificationListsServicesAndTracksConfirmedRequest() {
+		String sender = "new-messenger-tester";
+		java.util.function.Function<String, DealershipConversationService.Result> chat = text -> conversations.receive(
+				new IncomingMessage("MESSENGER", "test-page", sender, UUID.randomUUID().toString(), text, clock.instant()));
+		var first = chat.apply("can i schedule soon");
+		assertThat(first.reply()).contains("verify", "record a request").doesNotContain("demo administrator");
+		assertThat(chat.apply("how can i do that").reply()).contains("representative", "verification");
+		assertThat(chat.apply("whatt").reply()).contains("representative").doesNotContain("What would you like to check");
+		assertThat(chat.apply("what dealership services do you offer").reply()).contains("registration renewal", "Preventive Maintenance Service", "2-in-1", "3-in-1");
+		assertThat(chat.apply("sure go").reply()).contains("recorded your request");
+		assertThat(chat.apply("??? wheres my request").reply()).contains("request", "recorded", "does not automatically notify");
+		assertThat(chat.apply("???").reply()).contains("request", "recorded");
+		assertThat(store.appointment(first.customerId())).isEmpty();
+		assertThat(store.events(first.customerId())).filteredOn(e -> e.eventType().equals("HUMAN_HANDOFF_REQUESTED")).hasSize(1);
+		assertThat(chat.apply("sure").reply()).contains("recorded your request");
+		assertThat(store.events(first.customerId())).filteredOn(e -> e.eventType().equals("HUMAN_HANDOFF_REQUESTED")).hasSize(1);
+	}
+	@Test
+	void statusDoesNotInventRequestOrExposeAnotherCustomerRequest() {
+		reply("demo-renewal", "SMS", "I want a representative");
+		var stranger = conversations.receive(new IncomingMessage("SMS", "demo", "demo-new-stranger", UUID.randomUUID().toString(), "wheres my request", clock.instant()));
+		assertThat(stranger.reply()).contains("haven't recorded");
+		assertThat(store.hasHandoffRequest(stranger.customerId())).isFalse();
+		var confirmed = conversations.receive(new IncomingMessage("SMS", "demo", "demo-new-stranger", UUID.randomUUID().toString(), "go ahead", clock.instant()));
+		assertThat(confirmed.reply()).contains("recorded your request");
+		assertThat(store.hasHandoffRequest(stranger.customerId())).isTrue();
+	}
+	@Test
+	void renewalHandoffProvidesPersistentTrackingAndExplainsNotificationConfusion() {
+		java.util.function.Function<String, DealershipConversationService.Result> chat = text -> conversations.receive(
+				new IncomingMessage("MESSENGER", "test-page", "tracking-tester", UUID.randomUUID().toString(), text, clock.instant()));
+		var first = chat.apply("hello go ahead with my renewal schedule for friday");
+		var confirmation = chat.apply("sure");
+		var request = store.representativeRequest(first.customerId(), null).orElseThrow();
+		assertThat(request.trackingNumber()).matches("REQ-[A-F0-9]{16}");
+		assertThat(request.requestedDate()).isEqualTo("2026-10-16");
+		assertThat(confirmation.reply()).contains(request.trackingNumber(), "pending review");
+		assertThat(chat.apply("has not been notified whatt").reply()).contains("wasn't clear", request.trackingNumber(), "does not automatically notify").doesNotContain("What would you like to check");
+		assertThat(chat.apply("follow up " + request.trackingNumber()).reply()).contains(request.trackingNumber(), "pending review");
+		assertThat(chat.apply("sure").reply()).contains(request.trackingNumber());
+		assertThat(store.events(first.customerId())).filteredOn(e -> e.eventType().equals("HUMAN_HANDOFF_REQUESTED")).hasSize(1);
+		var other = conversations.receive(new IncomingMessage("SMS", "demo", "demo-other-tracking-user", UUID.randomUUID().toString(), request.trackingNumber(), clock.instant()));
+		assertThat(other.reply()).contains("couldn't find").doesNotContain(request.trackingNumber(), "pending review");
+	}
+	@Test
+	void unknownPhrasingAcknowledgesLackOfUnderstandingRatherThanRepeatingTheServiceMenu() {
+		assertThat(reply("demo-renewal", "SMS", "flibbertigibbet").reply()).contains("didn't fully understand", "rephrase").doesNotContain("What would you like to check");
+	}
+	@Test
+	void trackingFollowsExplicitlyVerifiedIdentityLink() {
+		var incoming = new IncomingMessage("MESSENGER", "test-page", "linked-request-tester", UUID.randomUUID().toString(), "I want a representative", clock.instant());
+		var receipt = conversations.receive(incoming);
+		var request = store.representativeRequest(receipt.customerId(), null).orElseThrow();
+		store.link(new ChannelIdentity("MESSENGER", "test-page", "linked-request-tester", "demo-renewal", true, true, true, null), clock.millis());
+		var followup = conversations.receive(new IncomingMessage("MESSENGER", "test-page", "linked-request-tester", UUID.randomUUID().toString(), "follow up " + request.trackingNumber(), clock.instant()));
+		assertThat(followup.customerId()).isEqualTo("demo-renewal");
+		assertThat(followup.reply()).contains(request.trackingNumber(), "pending review");
+		assertThat(store.representativeRequest(receipt.customerId(), request.trackingNumber())).isEmpty();
+	}
+	@Test
+	void acceptingAnInquiryHandoffDoesNotStartBookingAndServicesRemainPublic() {
+		assertThat(reply("demo-renewal", "SMS", "What documents are required for vehicle registration?").reply()).contains("confirmation");
+		assertThat(reply("demo-renewal", "TELEGRAM", "whatt").reply()).contains("offering to record");
+		assertThat(reply("demo-renewal", "TELEGRAM", "sure go").reply()).contains("recorded your request");
+		assertThat(store.appointment("demo-renewal")).isEmpty();
+		assertThat(reply("demo-renewal", "SMS", "what dealership services do you offer").reply()).doesNotContain("need confirmation", "verify");
+	}
+	@Test
 	void answersInTaglishAndDoesNotRepeatMenusOrIntroductions() {
 		assertThat(reply("demo-booking", "SMS", "Gusto ko mag book sa Biyernes po").reply()).contains("Anong oras");
 		assertThat(reply("demo-booking", "TELEGRAM", "9am po").reply()).contains("Naitala").doesNotContain("2-in-1", "3-in-1", "assistant");

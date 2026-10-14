@@ -119,6 +119,8 @@ Keep tester identifiers in ignored local files, not committed fixtures. After ve
 
 For WhatsApp use `channel: WHATSAPP`, the configured phone-number ID as `accountId`, and the verified WhatsApp sender ID as `externalId`. Similar names/phone numbers never link accounts. Unknown senders receive isolated histories and generic dealership answers; they cannot retrieve private customer facts or book appointments. An admin may associate an unverified isolated account after verifying ownership; verified identities cannot be reassigned. Existing history from the exact verified Messenger page/PSID is imported without deleting legacy rows. An identity's prior opt-out blocks reassociation that could restore campaign contact.
 
+Unlinked customers can ask about the configured service catalog, ask how verification works, and record a request for a representative. Booking confirmation and personal record access still require verified linking.
+
 Test Messenger via `GET/POST /api/webhooks/messenger`, and WhatsApp via `GET/POST /webhooks/whatsapp`, using genuine provider traffic with the existing Meta signature checks. Send an initial customer message to establish a valid reply window, then book through that channel and continue using a second explicitly linked account.
 
 Messenger proactive outreach in this demo is limited to the standard recent-inbound messaging window; see [Meta's Messenger Send API collection](https://www.postman.com/meta/messenger-platform-api/folder/vilwbh4/send-api). WhatsApp campaign outreach always requires configured approved templates and the existing recipient/template allowlists. Configure `whatsAppTemplates` by script key, for example:
@@ -153,6 +155,8 @@ To verify persistence, run a booking, stop the application with Ctrl+C, restart 
 Focused tests cover grounded/scope-limited replies, bilingual booking, cross-channel context, durable database reopening, duplicate webhooks/schedulers, fallback exhaustion, global opt-out, slot capacity, failed booking persistence, reply routing, delivery status, and authenticated controls.
 
 The V3 migration adds dealership customer/identity/conversation/message, execution/attempt/channel-progress, appointment/slot, and event tables. V1/V2 Messenger data remains intact. No new dependencies or framework upgrades are needed.
+
+V4 adds persisted representative requests with a tracking number such as `REQ-<16-character reference>`, status `PENDING_REVIEW`, and any requested service/date/time. Existing handoff events receive references during migration. Confirmations and follow-ups return the same pending reference, including after restart or verified account linking. Ask "follow up REQ-..." to check it; a reference does not grant access to another customer's request. The admin customer view includes `representativeRequest`. Unknown phrasing asks for clarification rather than assuming an unrelated question; notification questions explain the pending request and the demo's lack of automatic human notifications.
 
 The H2 pool initializes connections with `SET WRITE_DELAY 0` so newly committed messages, attempts, and opt-outs are flushed without H2's default delay. This also applies when a custom file database URL is supplied. See [H2's write-delay documentation](https://h2database.com/html/commands.html#set_write_delay). A future migration to another database must replace this H2-specific setting.
 
