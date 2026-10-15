@@ -43,6 +43,7 @@ public class TmbgBookingAssistant {
 	private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH);
 	private static final DateTimeFormatter SLOT_LABEL = DateTimeFormatter.ofPattern("EEE MMM d h:mma", Locale.ENGLISH);
 	private static final Set<String> SERVICES = Set.of("registration", "ctpl", "pms", "comprehensive");
+	private static final int SLOT_CHOICES = 3;
 	private static final Set<String> STAGES = Set.of("OPENER_SENT", "REG_STATUS_ASKED", "REG_STATUS_KNOWN", "OFFER_MADE", "SLOTS_OFFERED");
 	private static final Pattern FALSE_CONFIRMATION = Pattern.compile("(?i)\\b(confirmed|booked|TMB-\\d+)\\b");
 	private static final String DEMO_RULES = """
@@ -61,6 +62,7 @@ public class TmbgBookingAssistant {
 		Only select a knowledge_topic if its answer actually addresses the latest question. Do not treat unrelated questions as dealership questions or repeat a sales pitch for missing facts.
 		Do not select a topic for booking commands, consent, opt-out, appointment changes, or vehicle-specific facts not covered by that answer. Set knowledge_topic to null otherwise.
 		AFTER CONFIRMED: Never restart booking, offer new slots, cancel, reschedule or claim changes were saved. For changes set outcome to booking_change; otherwise unsupported questions use outcome unavailable. General knowledge questions still use knowledge_topic.
+		Offer at most three appointment choices at a time, using only the current slots_text. When the customer asks to explore other dates while SLOTS_OFFERED, set outcome more_dates; the service supplies the next set. Never assemble your own menu from the full customer record.
 		Do not invent contact numbers, URLs, prices, offers, address, hours, inventory, availability, warranty promises or advisor handoffs. Tell customers to contact Toyota Manila Bay directly for unsupported requests.
 		""";
 
@@ -138,7 +140,10 @@ public class TmbgBookingAssistant {
 		Map<String, Object> fields = fields(session, phone(channel, participant));
 		String reply;
 		try {
-			if (session.stage.equals("CONFIRMED") && knowledge.bookingChange(content)) {
+			if (session.stage.equals("SLOTS_OFFERED") && content.toLowerCase(Locale.ROOT).trim().matches(
+					"(?s)(?:more|next)[.!? ]*|.*\\b(?:(?:more|other|different|next|later|another) (?:dates?|slots?|options?|times?)|ibang (?:petsa|araw|schedule)|iba pa)\\b.*")) {
+				reply = moreDates(session, phone(channel, participant));
+			} else if (session.stage.equals("CONFIRMED") && knowledge.bookingChange(content)) {
 				reply = bookingChangesUnavailable(session);
 			} else {
 				JsonNode answer = ai.provider() == AiProperties.Provider.MOCK ? mockAnswer(session, content, fields)
@@ -189,6 +194,9 @@ public class TmbgBookingAssistant {
 		String approved = knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, session.channel);
 		if (approved != null) return session.language.equals("en") ? fullEnglish(approved) : approved;
 		if (session.stage.equals("CONFIRMED")) return chatUnavailable(session);
+		if (session.stage.equals("SLOTS_OFFERED") && answer.path("outcome").asString().equals("more_dates")) {
+			return moreDates(session, phone(incoming.channel(), incoming.sender()));
+		}
 		String template = answer.path("template_id").asString("");
 		String outcome = answer.path("outcome").asString("");
 		if (outcome.equals("unavailable")) return chatUnavailable(session);
@@ -220,10 +228,10 @@ public class TmbgBookingAssistant {
 		if (template.equals("REG_ALREADY_RENEWED")) stage = "OFFER_MADE";
 		if (template.equals("SLOTS_OFFER") || stage.equals("SLOTS_OFFERED")) {
 			if (availableSlots().isEmpty()) return noSlots(session);
-			session.slots = availableSlots();
+			session.slots = slotChoices(session);
 			stage = "SLOTS_OFFERED";
 			// Keep the service's exact menu so later slot letters cannot refer to invented times.
-			text = render("SLOTS_OFFER", session, fields);
+			text = render("SLOTS_OFFER", session, fields(session, phone(incoming.channel(), incoming.sender())));
 		}
 		if (STAGES.contains(stage)) session.stage = stage;
 		return text;
@@ -236,7 +244,7 @@ public class TmbgBookingAssistant {
 				|| !code.equals(chosenSlot(session, incoming.content())) || !session.slots.containsKey(code)) return fallback(session, fields);
 		String selected = session.slots.get(code);
 		if (!availableSlots().containsValue(selected)) {
-			session.slots = availableSlots();
+			session.slots = slotChoices(session);
 			if (session.slots.isEmpty()) return noSlots(session);
 			return render("SLOT_TAKEN", session, fields(session, phone(incoming.channel(), incoming.sender())));
 		}
@@ -337,7 +345,7 @@ public class TmbgBookingAssistant {
 			fields.put(name, value.isNull() || value.isMissingNode() ? "to be confirmed by a TMBG advisor"
 					: name.equals("pms_price") || name.equals("reg_service_fee") ? "PHP " + value.asString() : value.asString());
 		}
-		Map<String, String> slots = availableSlots();
+		Map<String, String> slots = session.stage.equals("SLOTS_OFFERED") ? session.slots : slotChoices(session);
 		fields.put("slots_text", slots.entrySet().stream().map(entry -> entry.getKey() + "=" + label(entry.getValue())).reduce((a, b) -> a + "; " + b).orElse("no slots available"));
 		fields.put("slot_codes", String.join("/", slots.keySet()));
 		return fields;
@@ -353,9 +361,25 @@ public class TmbgBookingAssistant {
 			if (!date.isAfter(today()) || date.isBefore(start) || date.isAfter(end)
 					|| bookings.stream().anyMatch(booking -> booking.path("appointment").asString().equals(slot))) continue;
 			slots.put(String.valueOf((char) ('A' + slots.size())), slot);
-			if (slots.size() == 3) break;
 		}
 		return slots;
+	}
+
+	private Map<String, String> slotChoices(Session session) {
+		List<String> available = new ArrayList<>(availableSlots().values());
+		if (session.slotOffset >= available.size()) session.slotOffset = 0;
+		Map<String, String> choices = new LinkedHashMap<>();
+		for (int index = session.slotOffset; index < Math.min(session.slotOffset + SLOT_CHOICES, available.size()); index++) {
+			choices.put(String.valueOf((char) ('A' + choices.size())), available.get(index));
+		}
+		return choices;
+	}
+
+	private String moreDates(Session session, String phone) {
+		session.slotOffset += SLOT_CHOICES;
+		session.slots = slotChoices(session);
+		if (session.slots.isEmpty()) return noSlots(session);
+		return render("SLOTS_OFFER", session, fields(session, phone));
 	}
 
 	private String chosenSlot(Session session, String text) {
@@ -485,6 +509,7 @@ public class TmbgBookingAssistant {
 		private String registration = "unknown";
 		private String language = "en";
 		private Map<String, String> slots = new LinkedHashMap<>();
+		private int slotOffset;
 		private List<String> services = List.of("registration", "ctpl", "pms");
 		private final List<Map<String, String>> history = new ArrayList<>();
 		private final Map<String, String> replies = new LinkedHashMap<>();

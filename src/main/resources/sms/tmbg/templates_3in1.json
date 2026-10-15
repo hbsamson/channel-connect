@@ -55,8 +55,8 @@
       "scenario": "Offer appointment slots",
       "when": "Owner accepted. Only slots inside the registration window are ever offered.",
       "used_by": "assistant",
-      "en": "Slots at {{branch_name}}: {{slots_text}}. Reply with your preferred date/time or {{slot_codes}}.",
-      "tl": "Mga slot po sa {{branch_name}}: {{slots_text}}. Sabihin ang gustong petsa/oras o {{slot_codes}}.",
+      "en": "Slots at {{branch_name}}: {{slots_text}}. Reply with your preferred date/time or {{slot_codes}}. MORE for other dates.",
+      "tl": "Mga slot po sa {{branch_name}}: {{slots_text}}. Sabihin ang gustong petsa/oras o {{slot_codes}}. MORE para sa ibang petsa.",
       "fallback_en": "Our advisor will message you shortly with available dates. Reply AGENT to talk to a person now.",
       "fallback_tl": "Magme-message po ang advisor namin para sa available na petsa. Reply AGENT kung gusto ninyong makausap ang tao ngayon."
     },

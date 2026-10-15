@@ -45,6 +45,8 @@ After confirmation, requests to change, reschedule or cancel receive: "Bookings 
 
 Slot letters are optional. Customers can choose an available appointment with wording such as `October 19 please`, `Monday works for me`, or `Sa October 19 na lang po`. A date with multiple offered times needs a time before it can be booked. Unavailable or ambiguous choices prompt clarification with the offered dates and times.
 
+The fictional slot pool contains ten appointments across October 16, 17, 19, 20 and 21, 2026, inside the supplied registration window. Each menu shows at most three choices, labeled A/B/C. Reply `MORE`, `next`, `other dates`, or `ibang petsa` to browse another set without booking. After the last set, browsing returns to the first available set. Letters always refer to the latest menu for that conversation. Knowledge questions retain the current menu. Past dates and appointments already booked on either channel are excluded, and a selected slot is checked against the full available pool before saving. These fixed demo dates still expire as the clock advances.
+
 Selections also accept a unique day of the month (`19th`), `I'm available on October 19`, `October 19 would work for me`, `this coming Monday`, or `option B is fine`. Customers need not copy the script. Choices must still identify one of the actual offered slots; questions, refusals and ambiguous dates do not create bookings.
 
 Conversation state is process-local. Restarting the application or calling the start endpoint resets the demo session. The existing SMS inbox and outbox keep their normal persistence and transmission rules.
