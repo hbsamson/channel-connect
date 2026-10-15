@@ -36,11 +36,12 @@ public class SmsReceiveService {
 	}
 
 	public DeferredResult<SmsReceiveResponse> receive(String account, String sender, long after, int limit, int waitSeconds) {
-		if (after < 0 || limit < 1 || limit > 100 || waitSeconds < 0 || waitSeconds > 30) throw new SmsException(SmsException.Reason.INVALID);
+		if (after < 0 || limit < 1 || limit > 100 || waitSeconds < -1 || waitSeconds > 30) throw new SmsException(SmsException.Reason.INVALID);
 		try { properties.channel(account); }
 		catch (IllegalArgumentException exception) { throw new SmsException(SmsException.Reason.FORBIDDEN); }
 		String participant = sender == null ? null : SmsValidation.phone(sender);
-		var result = new DeferredResult<SmsReceiveResponse>(waitSeconds * 1000L);
+		// Servlet async timeout 0 disables expiry; -1 is the API's wait-until-message option.
+		var result = new DeferredResult<SmsReceiveResponse>(waitSeconds == -1 ? 0L : waitSeconds * 1000L);
 		var poll = new Poll(account, participant, after, limit, result);
 		SmsReceiveResponse available = read(poll);
 		if (waitSeconds == 0 || !available.messages().isEmpty()) {

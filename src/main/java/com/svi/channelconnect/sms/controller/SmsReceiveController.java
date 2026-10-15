@@ -31,7 +31,7 @@ public class SmsReceiveController {
 	@GetMapping(path = "/receive", produces = "application/json")
 	public DeferredResult<SmsReceiveResponse> receive(@RequestParam String accountId,
 			@RequestParam(required = false) String sender, @RequestParam(defaultValue = "0") long after,
-			@RequestParam(defaultValue = "100") int limit, @RequestParam(defaultValue = "25") int waitSeconds) {
+			@RequestParam(defaultValue = "100") int limit, @RequestParam(defaultValue = "-1") int waitSeconds) {
 		return sms.receive(accountId, sender, after, limit, waitSeconds);
 	}
 }

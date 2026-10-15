@@ -113,7 +113,7 @@
             }
           ]
         },
-        "url": "{{baseUrl}}/api/v1/sms/receive?accountId={{accountId}}&after={{receiveCursor}}&waitSeconds=25"
+        "url": "{{baseUrl}}/api/v1/sms/receive?accountId={{accountId}}&after={{receiveCursor}}"
       }
     },
     {
