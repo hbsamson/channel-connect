@@ -16,6 +16,7 @@ import com.openai.errors.UnauthorizedException;
 import com.openai.models.responses.Response;
 import com.openai.models.responses.ResponseCreateParams;
 import com.openai.models.responses.ResponseTextConfig;
+import com.openai.models.responses.ResponseStatus;
 import com.openai.models.ResponseFormatJsonObject;
 import com.openai.models.Reasoning;
 import com.openai.models.ReasoningEffort;
@@ -24,6 +25,7 @@ import com.svi.channelconnect.ai.dto.AiRequest;
 import com.svi.channelconnect.ai.dto.AiResponse;
 import com.svi.channelconnect.ai.exception.AiClientException;
 import com.svi.channelconnect.common.exception.ExternalFailureCategory;
+import com.svi.channelconnect.common.text.MessageTextLimiter;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -58,6 +60,11 @@ public class OpenAiApiClient implements AiClient {
 		ResponseCreateParams params = builder.build();
 		try {
 			Response response = openAIClient.responses().create(params);
+			if (response.status().filter(ResponseStatus.INCOMPLETE::equals).isPresent()
+					|| response.incompleteDetails().isPresent()) {
+				throw new AiClientException(ExternalFailureCategory.MALFORMED_RESPONSE,
+						"OpenAI returned an incomplete response", null);
+			}
 			String text = response.output().stream()
 					.flatMap(item -> item.message().stream())
 					.flatMap(message -> message.content().stream())
@@ -71,7 +78,11 @@ public class OpenAiApiClient implements AiClient {
 						"OpenAI returned an empty response", null);
 			}
 			if (text.length() > properties.maxResponseCharacters()) {
-				text = text.substring(0, properties.maxResponseCharacters());
+				if (request.jsonOutput()) {
+					throw new AiClientException(ExternalFailureCategory.MALFORMED_RESPONSE,
+							"OpenAI structured response exceeded the configured limit", null);
+				}
+				text = MessageTextLimiter.shorten(text, properties.maxResponseCharacters());
 			}
 			return new AiResponse(text);
 		}

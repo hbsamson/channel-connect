@@ -20,5 +20,6 @@ public record OpenAiProperties(
     public static final String DEFAULT_ASSISTANT_INSTRUCTIONS = "You are a helpful Messenger assistant. "
             + "Use the conversation history to remember what the user has told you, including preferences. "
             + "Reply naturally and concisely, usually in 1-3 sentences. Avoid long lists, introductions, "
-            + "generic filler, and unnecessary follow-up questions. Give a detailed answer when the user explicitly asks for one.";
+            + "generic filler, and unnecessary follow-up questions. Give a detailed answer when the user explicitly asks for one. "
+            + "Finish complete sentences and questions within the response budget; omit optional detail instead of ending mid-sentence.";
 }
