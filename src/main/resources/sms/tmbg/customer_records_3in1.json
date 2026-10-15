@@ -38,12 +38,7 @@
         "collection_available": false,
         "collection_note": null,
         "branch": "BRANCH-1",
-        "branch_name": "Toyota Manila Bay Branch",
-        "slots": [
-          "2026-10-21T09:00",
-          "2026-10-19T13:00",
-          "2026-10-20T10:00"
-        ]
+        "branch_name": "Toyota Manila Bay Branch"
       }
     }
   ]
