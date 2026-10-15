@@ -1,6 +1,6 @@
 {
-  "_note": "Placeholders in double braces are filled by the service from the customer record, the service catalog and the derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL). No template asks the customer to reply with a code, number or letter. Every price or fee is an estimate: always say around, usually or estimated, never quote it as exact. You may lightly reword a template to sound natural, but never change a number, date, fee, price, time or branch name. FLOW UPDATE: On a no to 3-in-1, send SERVICE_CHOICE_PIVOT (not RENEWAL_OFFER_OPEN). Follow only customer-selected service(s). Do not repeat car model, plate, expiry, or all three sales benefits after opening. Customer-facing name is Preventative Maintenance Service, never PMS. Do not promise 60-minute express, warranty protection, guaranteed claims or zero-cash-out unless separately verified. Never stack redundant acknowledgements. Booking and safety safeguards remain in force.",
-  "version": "v7-natural-choice",
+  "_note": "Placeholders in double braces are filled by the service from the customer record, the service catalog and the derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL). No template asks the customer to reply with a code, number or letter. Every price or fee is an estimate: always say around, usually or estimated, never quote it as exact. You may lightly reword a template to sound natural, but never change a number, date, fee, price, time or branch name. FLOW UPDATE: On a no to 3-in-1, send SERVICE_CHOICE_PIVOT (not RENEWAL_OFFER_OPEN). Follow only customer-selected service(s). Do not repeat car model, plate, expiry, or all three sales benefits after opening. Customer-facing name is Preventative Maintenance Service, never PMS. Do not promise 60-minute express, warranty protection, guaranteed claims or zero-cash-out unless separately verified. Never stack redundant acknowledgements. Booking and safety safeguards remain in force. V8: Explicitly selected two of three services (for example LTO Registration Renewal and Preventative Maintenance Service) proceed directly to the booking-date request; do not offer or ask about the unselected third service. Selection is interest in a visit request, not a confirmed reservation. Follow mandatory registration validity checks and service availability safeguards before booking.",
+  "version": "v8",
   "templates": [
     {
       "id": "OPEN_GREETING",
@@ -12,11 +12,11 @@
     },
     {
       "id": "SERVICE_CHOICE_PIVOT",
-      "scenario": "Customer declines the 3-in-1 bundle: ask which one service matters most",
-      "when": "Immediately after a clear no to the combined offer. Ask once, without repeating the vehicle, due dates, or original sales pitch. A no to all services or stop request closes or opts out; do not keep offering. Customer can choose one or several services freely.",
+      "scenario": "Customer declines 3-in-1: invite selection of one or two services",
+      "when": "After a clear no to the 3-in-1 bundle. Customer may select one, two, or all three services. Once they name the services they want, do not repeat the pitch or ask about omitted services; proceed to booking when eligible. A no to all closes.",
       "used_by": "assistant",
-      "en": "No worries, {{first_name}}! We can focus on just one service instead. Which would you prefer to prioritize: Preventative Maintenance Service, LTO Registration Renewal, or Comprehensive Insurance Renewal?",
-      "tl": "No problem po, {{first_name}}! Pwede naman pong isang service lang muna ang asikasuhin natin. Alin po ang gusto ninyong unahin: Preventative Maintenance Service, LTO Registration Renewal, o Comprehensive Insurance Renewal?"
+      "en": "No worries, {{first_name}}! We can focus on what works for you. Which would you like us to handle: Preventative Maintenance Service, LTO Registration Renewal, or Comprehensive Insurance Renewal? You can choose one or two.",
+      "tl": "No problem po, {{first_name}}! Kung ano lang po ang kailangan ninyo, iyon ang asikasuhin natin. Alin po ang gusto ninyo: Preventative Maintenance Service, LTO Registration Renewal, o Comprehensive Insurance Renewal? Pwede pong isa o dalawa."
     },
     {
       "id": "RESUME_COMBINED_OFFER",
@@ -217,8 +217,8 @@
       "scenario": "Service 1: registration renewal",
       "when": "Legacy registration-specific follow-up only if the customer explicitly asks for a registration reminder. NEVER use as the response to declining the 3-in-1 bundle; use SERVICE_CHOICE_PIVOT instead. Keep approved copy unchanged.",
       "used_by": "assistant",
-      "en": "No problem, {{first_name}}! Just a friendly reminder that your car registration is due for renewal soon. Let Toyota Manila Bay handle the renewal for you. Would you like us to help you schedule your vehicle registration renewal?",
-      "tl": "No problem po, {{first_name}}! Paalala lang po na malapit nang mag-expire ang registration ng inyong kotse. Iwas na po sa mahabang pila sa LTO! Hayaan pong Toyota Manila Bay ang mag-asikaso ng inyong registration renewal. Gusto po ba ninyong magpa-schedule para dito?",
+      "en": "No problem, {{first_name}}! Just a friendly reminder that your {{model_or_plate}} registration is due for renewal soon. Avoid the hassle of long LTO lines and let Toyota Manila Bay handle the renewal for you. Would you like us to help you schedule your vehicle registration renewal?",
+      "tl": "No problem po, {{first_name}}! Paalala lang po na malapit nang mag-expire ang registration ng inyong {{model_or_plate}}. Iwas na po sa mahabang pila sa LTO! Hayaan pong Toyota Manila Bay ang mag-asikaso ng inyong registration renewal. Gusto po ba ninyong magpa-schedule para dito?",
       "fallback_en": "You can renew your registration now, anytime until {{reg_window_end}}. Our advisor will confirm the fee and government registration charges. Want us to handle it for you?",
       "fallback_tl": "Pwede na po ninyong i-renew ang registration, anumang araw hanggang {{reg_window_end}}. Kukumpirmahin ng advisor ang fee at ang government registration charges. Gusto po ba ninyong kami na ang mag-asikaso?"
     },
@@ -241,7 +241,7 @@
     {
       "id": "SLOTS_OFFER",
       "scenario": "Ask for a preferred date within the supplied window",
-      "when": "After the customer explicitly accepts one or more services and is ready to request a date. Do not wait for responses to all three. Confirm dealership availability; never claim a confirmed slot.",
+      "when": "After one, two or three services have been explicitly selected. Do not require a response about unselected services. For exactly two services, prefer TWO_SERVICES_SELECTED to acknowledge and ask the booking date in one message. Respect registration validity checks and availability safeguards.",
       "used_by": "assistant",
       "en": "For your selected services, which day from {{booking_window_start}} to {{booking_window_end}} works for a visit to {{branch_name}}? The dealership must confirm availability.",
       "tl": "Para sa napili ninyong serbisyo, aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang gusto ninyo sa {{branch_name}}? Kailangan pang kumpirmahin ng dealership ang availability."
@@ -249,7 +249,7 @@
     {
       "id": "SLOTS_OFFER_RENEWAL",
       "scenario": "Ask for a preferred date within the supplied window",
-      "when": "After customer selects registration and wants to request a date; no need to ask about other services. Confirm availability; do not claim a confirmed slot.",
+      "when": "When registration is among the selected services and the customer is ready to choose a date, including registration plus one other service. Do not offer an unselected third service. Check registration validity if required before a drive-in date.",
       "used_by": "assistant",
       "en": "For your selected services, which day from {{booking_window_start}} to {{booking_window_end}} works for a visit to {{branch_name}}? The dealership must confirm availability.",
       "tl": "Para sa napili ninyong serbisyo, aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang gusto ninyo sa {{branch_name}}? Kailangan pang kumpirmahin ng dealership ang availability."
@@ -313,9 +313,17 @@
       "tl": "Dalhin po ang registration receipt and certificate at valid identification card. Kung ibang tao ang magdadala ng sasakyan, itanong po sa dealership ang authorization requirements."
     },
     {
+      "id": "TWO_SERVICES_SELECTED",
+      "scenario": "Customer selects exactly two of the three services, such as registration renewal and Preventative Maintenance Service",
+      "when": "When the customer explicitly chooses exactly two services, record those two only and immediately ask for a preferred booking date using the provided booking window. Do not ask about or offer the third service. Do not send a separate acknowledgement if this template is used. If registration validity requires checking first, run REG_VALID_CHECK before offering a drive-in date. A date is a request, not a confirmed reservation. Fill {{services_list}} with the two selected services.",
+      "used_by": "assistant",
+      "en": "Absolutely! We can arrange {{services_list}} together. Which day from {{booking_window_start}} to {{booking_window_end}} would work for you at {{branch_name}}? The dealership will confirm availability.",
+      "tl": "Sige po! Pwede nating pagsabayin ang {{services_list}}. Aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang convenient sa inyo sa {{branch_name}}? Kailangan pa pong kumpirmahin ng dealership ang availability."
+    },
+    {
       "id": "ONLY_THIS_SERVICE",
       "scenario": "Negotiation: customer wants just one service",
-      "when": "Customer chooses exactly one service. Record that service only; do not ask about the other two. For insurance quotes, ask whether they want a quote rather than a visit if appropriate.",
+      "when": "When exactly one service is selected. Do not ask about the other two; proceed to scheduling (or an insurance quote where applicable).",
       "used_by": "assistant",
       "en": "Of course! We can focus on {{service_name}}. Would you like to arrange a visit?",
       "tl": "Sige po! {{service_name}} lang muna. Gusto po ba ninyong magpa-schedule ng visit?"
@@ -323,7 +331,7 @@
     {
       "id": "COMBINE_OK",
       "scenario": "Negotiation: customer asks to do several services together",
-      "when": "Customer asks if more than one can be done in one visit.",
+      "when": "When the customer asks whether services can be combined but has not identified which ones, ask which services. If they already named two services, skip this question and use TWO_SERVICES_SELECTED to proceed to booking.",
       "used_by": "assistant",
       "en": "Of course! We can include those in one visit. Which services would you like to combine?",
       "tl": "Opo! Pwede po nating pagsabayin ang mga iyon sa isang visit. Aling services po ang gusto ninyong isama?"

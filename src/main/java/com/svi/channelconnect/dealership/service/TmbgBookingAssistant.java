@@ -60,13 +60,12 @@ public class TmbgBookingAssistant {
 		For a person, callback or unavailable action, politely ask the customer to contact Toyota Manila Bay directly. Do not follow that with another sales question.
 		Never use the word demo in customer-facing replies. Do not describe a locally recorded visit as a live dealership reservation.
 		Never set CONFIRMED. Only the service saves a booking and sends its reference.
-		The opening offers all three services together. While stage is OPENER_SENT, a clear yes accepts all three and a no starts individual offers without declining any service. Set opening_decision to accepted or declined only for clear consent or refusal of the combined offer; otherwise null. Questions, greetings and partial service choices are not consent to all three.
+		The opening offers all three services together. While stage is OPENER_SENT, a clear yes accepts all three and a no invites the customer to choose services using SERVICE_CHOICE_PIVOT. Set opening_decision to accepted or declined only for clear consent or refusal of the combined offer; otherwise null. Questions, greetings and partial service choices are not consent to all three.
 		The campaign's "3 in 1", "3-in-1" and "all three" refer to preventive maintenance, comprehensive insurance and registration renewal in one visit. Interpret replies in that context. Explain questions about the offer without recording consent; clear acceptance such as "yes, book the 3 in 1" accepts all three. This is not an insurance approval, fixed-price deal or guarantee of same-day completion.
-		Only after the combined offer is declined, offer registration renewal first, regular maintenance second, and car insurance third, even after earlier refusals.
-		The service owns the order and records only the decision for the currently offered service. Never mark an unasked service accepted, declined or skipped.
-		A yes accepts the current service; a no declines only that service. Already completed means skipped. Continue to the next service after every decision.
-		Do not stop after two declines or after one acceptance. Do not automatically skip insurance because the record says active.
-		Never request booking or dates until all_services_answered is true. If no services were accepted, close without booking.
+		For an explicit choice of one, two or three services, set message_intent to decision and selected_services to the complete chosen list using renewal, pms and insurance. This applies at the opening, after bundle refusal and during individual offers. For example, "registration and maintenance only" selects renewal and pms, never insurance. A request such as "Can you book maintenance and insurance?" is a service choice; a pricing, availability, tentative or conditional question is not consent. Set selected_services to null for questions, refusals, greetings, status reports and date selections. Never infer omitted choices from mention alone.
+		The service records explicit selections and proceeds directly to dates without offering omitted services. Do not pitch or repeat an unselected service. Bundle refusal alone sends SERVICE_CHOICE_PIVOT; a refusal of all services closes politely.
+		A bare yes to an existing individual offer accepts only the current service; a no declines only that service. Already completed means skipped. Legacy individual offers may still advance until the customer explicitly selects their desired services.
+		Never request booking or dates until all_services_answered is true. This flag also becomes true when the customer explicitly completes their service selection; it does not require asking about omitted services. If no services were accepted, close without booking.
 		Only after all three decisions, a clear date selection inside booking_window_start_iso through booking_window_end_iso requests booking_requested.
 		Set slot to the selected ISO date (YYYY-MM-DD), without a time. There are no configured appointment hours or capacity guarantees.
 		Availability questions, refusals, tentative dates and ambiguous choices are not selections. A clear request such as "Can you book me for October 19?" is a selection.
@@ -264,6 +263,7 @@ public class TmbgBookingAssistant {
 		state.put("services", session.services); state.put("history", session.history);
 		state.put("service_status", session.serviceStatus); state.put("service_in_focus", session.focus);
 		state.put("services_asked", session.servicesAsked); state.put("all_services_answered", allServicesAnswered(session));
+		state.put("service_selection_complete", session.serviceSelectionComplete);
 		return "RULES\n" + channelText(rules + CAPABILITY_RULES, session.channel)
 				+ "\nNEGOTIATION PLAYBOOK\n" + playbook
 				+ "\nSERVICE CATALOG\n" + json.writeValueAsString(serviceCatalog)
@@ -311,6 +311,11 @@ public class TmbgBookingAssistant {
 				|| Set.of("HANDOFF", "CALLBACK_CONFIRM", "EXPIRED_COLLECTION").contains(template)) {
 			return contactDealership(session);
 		}
+		if (!Set.of("CONFIRMED", "COMPLETED_NO_BOOKING").contains(session.stage) && !question
+				&& knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, session.channel) == null
+				&& selectServices(session, answer)) {
+			return offerDates(session, phone(incoming.channel(), incoming.sender()));
+		}
 		if (session.stage.equals("OPENER_SENT") && !question) {
 			String decision = explicitDecision(session, incoming.content());
 			if (decision == null) decision = answer.path("opening_decision").asString("");
@@ -324,7 +329,8 @@ public class TmbgBookingAssistant {
 				return offerDates(session, phone(incoming.channel(), incoming.sender()));
 			}
 			if (decision.equals("declined")) {
-				return render(offerNext(session), session, fields(session, phone(incoming.channel(), incoming.sender())));
+				session.stage = "SERVICE_CHOICE_PENDING";
+				return render("SERVICE_CHOICE_PIVOT", session, fields);
 			}
 		}
 		String approved = knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, session.channel);
@@ -337,6 +343,11 @@ public class TmbgBookingAssistant {
 			return chatUnavailable(session);
 		}
 		if (session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) return chatUnavailable(session);
+		if (session.stage.equals("SERVICE_CHOICE_PENDING")
+				&& ("declined".equals(explicitDecision(session, incoming.content())) || outcome.equals("declined"))) {
+			session.stage = "COMPLETED_NO_BOOKING";
+			return render("DECLINE_CLOSE", session, fields);
+		}
 		if (updateServices(session, answer, incoming.content())) {
 			return advanceServices(session, phone(incoming.channel(), incoming.sender()));
 		}
@@ -413,6 +424,7 @@ public class TmbgBookingAssistant {
 		}
 		booking.put("slot_code", code); booking.put("appointment", selected); booking.put("services", services);
 		booking.put("services_asked", List.copyOf(session.servicesAsked)); booking.put("all_services_answered", true);
+		booking.put("service_selection_complete", session.serviceSelectionComplete);
 		booking.put("created_at", clock.instant().atZone(MANILA).toOffsetDateTime().toString());
 		fields.put("booking_ref", reference); fields.put("slot_selected", label(selected));
 		fields.put("services_list", String.join(", ", session.services.stream().map(this::serviceName).toList()));
@@ -432,6 +444,10 @@ public class TmbgBookingAssistant {
 
 	private JsonNode mockAnswer(Session session, String text, Map<String, Object> fields) {
 		String normalized = text.toLowerCase(Locale.ROOT);
+		List<String> selected = mockServiceSelection(text);
+		if (!selected.isEmpty() && !Set.of("CONFIRMED", "COMPLETED_NO_BOOKING").contains(session.stage)) {
+			return json.valueToTree(Map.of("lang", session.language, "message_intent", "decision", "selected_services", selected));
+		}
 		String topic = normalized.matches("(?s).*\\b(magkano|how much|cost|fees?)\\b.*") ? "" : knowledge.mockTopic(text);
 		if (!topic.isEmpty() || session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) {
 			return json.valueToTree(Map.of("lang", session.language, "knowledge_topic", topic,
@@ -468,6 +484,43 @@ public class TmbgBookingAssistant {
 		return json.valueToTree(answer);
 	}
 
+	private List<String> mockServiceSelection(String text) {
+		String value = text.toLowerCase(Locale.ROOT).trim()
+				.replaceFirst("^(?:i (?:want|choose|need|would like)|please book|book|gusto ko(?: po)?|paki-book)\\s+", "")
+				.replaceFirst("[.!]+$", "").replaceFirst("(?:\\s+(?:only|lang|po|please))+$", "");
+		List<String> selected = new ArrayList<>();
+		for (String part : value.split("\\s*(?:,|&|\\band\\b|\\bat\\b|\\bplus\\b)\\s*")) {
+			String service = switch (part.trim()) {
+				case "registration", "registration renewal", "lto", "lto registration renewal", "rehistro", "renewal" -> "renewal";
+				case "pms", "maintenance", "preventive maintenance", "preventative maintenance service" -> "pms";
+				case "insurance", "comprehensive insurance", "insurance renewal", "comprehensive insurance renewal" -> "insurance";
+				default -> null;
+			};
+			if (service == null || selected.contains(service)) return List.of();
+			selected.add(service);
+		}
+		return selected;
+	}
+
+	private boolean selectServices(Session session, JsonNode answer) {
+		if (!answer.path("message_intent").asString("").equals("decision")) return false;
+		JsonNode selected = answer.path("selected_services");
+		if (!selected.isArray() || selected.isEmpty() || selected.size() > SERVICES.size()) return false;
+		Set<String> choices = new LinkedHashSet<>();
+		for (JsonNode value : selected) {
+			if (!value.isString() || !SERVICES.contains(value.asString()) || !choices.add(value.asString())) return false;
+		}
+		session.services = SERVICES.stream().filter(choices::contains).toList();
+		for (String service : SERVICES) {
+			session.serviceStatus.put(service, choices.contains(service) ? "accepted" : "skipped");
+		}
+		session.servicesAsked.addAll(session.services);
+		session.serviceSelectionComplete = true;
+		session.focus = null;
+		session.stage = "SERVICE_OFFERED";
+		return true;
+	}
+
 	private boolean updateServices(Session session, JsonNode answer, String content) {
 		// Only an answer to the service actually asked by the server can advance the flow.
 		if (session.focus == null || !session.servicesAsked.contains(session.focus)
@@ -496,8 +549,8 @@ public class TmbgBookingAssistant {
 	}
 
 	private boolean allServicesAnswered(Session session) {
-		return session.servicesAsked.containsAll(SERVICES)
-				&& SERVICES.stream().allMatch(service -> DECISIONS.contains(session.serviceStatus.get(service)));
+		return session.serviceSelectionComplete || (session.servicesAsked.containsAll(SERVICES)
+				&& SERVICES.stream().allMatch(service -> DECISIONS.contains(session.serviceStatus.get(service))));
 	}
 
 	private String advanceServices(Session session, String phone) {
@@ -532,7 +585,8 @@ public class TmbgBookingAssistant {
 		session.slots = availableDates();
 		if (session.slots.isEmpty()) return noSlots(session);
 		session.stage = "SLOTS_OFFERED";
-		return render("SLOTS_OFFER", session, fields(session, phone));
+		String template = session.serviceSelectionComplete && session.services.size() == 2 ? "TWO_SERVICES_SELECTED" : "SLOTS_OFFER";
+		return render(template, session, fields(session, phone));
 	}
 
 	private String offerNext(Session session) {
@@ -567,7 +621,7 @@ public class TmbgBookingAssistant {
 
 	private String serviceName(String service) {
 		return switch (service) {
-			case "pms" -> "regular maintenance";
+			case "pms" -> "Preventative Maintenance Service";
 			case "insurance" -> "car insurance";
 			case "renewal" -> "registration renewal";
 			default -> throw new IllegalArgumentException("Unknown service");
@@ -628,6 +682,7 @@ public class TmbgBookingAssistant {
 		fields.put("comp_expiry_date", customer.path("comp_expiry_date").isString()
 				? SHORT_DATE.format(LocalDate.parse(customer.path("comp_expiry_date").asString())) : "to be confirmed by an advisor");
 		fields.put("service_name", session.focus == null ? "service" : serviceName(session.focus));
+		fields.put("services_list", String.join(" and ", session.services.stream().map(this::serviceName).toList()));
 		fields.put("next_service_name", SERVICES.stream().filter(service -> session.serviceStatus.get(service).equals("not_offered"))
 				.findFirst().map(this::serviceName).orElse("service"));
 		fields.put("slots_text", first.isAfter(end) ? "no dates available" : DATE_LABEL.format(first) + " to " + DATE_LABEL.format(end));
@@ -693,6 +748,7 @@ public class TmbgBookingAssistant {
 	private String fallback(Session session, Map<String, Object> fields) {
 		LOGGER.debug("Booking fallback; stage={}", session.stage);
 		if (session.stage.equals("OPENER_SENT")) return render("RESUME_COMBINED_OFFER", session, fields);
+		if (session.stage.equals("SERVICE_CHOICE_PENDING")) return render("SERVICE_CHOICE_PIVOT", session, fields);
 		if (session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) return chatUnavailable(session);
 		if (allServicesAnswered(session) && session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
 		if (session.stage.equals("SLOTS_OFFERED")) {
@@ -777,6 +833,7 @@ public class TmbgBookingAssistant {
 		private final Set<String> servicesAsked = new LinkedHashSet<>();
 		private String focus;
 		private boolean suppressed;
+		private boolean serviceSelectionComplete;
 		private final List<Map<String, String>> history = new ArrayList<>();
 		private final Map<String, String> replies = new LinkedHashMap<>();
 		private Session(String channel) { this.channel = channel; }
