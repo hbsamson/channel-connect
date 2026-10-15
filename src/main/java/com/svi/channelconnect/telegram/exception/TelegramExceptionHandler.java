@@ -33,7 +33,21 @@ public class TelegramExceptionHandler {
 
 	@ExceptionHandler({MethodArgumentNotValidException.class, MissingRequestHeaderException.class})
 	ResponseEntity<TelegramApiErrorResponse> handleInvalidCampaignRequest() {
-		return error(HttpStatus.BAD_REQUEST, "Valid campaign fields, verified ownership, consent and Idempotency-Key are required");
+		return error(HttpStatus.BAD_REQUEST, "Request fields are invalid or Idempotency-Key is missing");
+	}
+
+	@ExceptionHandler(TelegramApiException.class)
+	ResponseEntity<TelegramApiErrorResponse> handleProviderFailure(TelegramApiException exception) {
+		log.warn("Telegram provider request failed; category={}", exception.category());
+		return switch (exception.category()) {
+			case INVALID_REQUEST -> error(HttpStatus.UNPROCESSABLE_CONTENT, "Telegram rejected the outbound message");
+			case AUTHENTICATION -> error(HttpStatus.BAD_GATEWAY, "Telegram provider authentication failed");
+			case THROTTLED -> error(HttpStatus.SERVICE_UNAVAILABLE, "Telegram is rate limiting outbound messages");
+			case TIMEOUT -> error(HttpStatus.GATEWAY_TIMEOUT, "Telegram submission outcome is unknown; inspect history before retrying");
+			case TRANSIENT, MALFORMED_RESPONSE -> error(HttpStatus.BAD_GATEWAY,
+					"Telegram submission outcome is unknown; inspect history before retrying");
+			case PERMANENT -> error(HttpStatus.BAD_GATEWAY, "Telegram rejected the outbound message");
+		};
 	}
 
 	@ExceptionHandler(TelegramCampaignException.class)

@@ -41,8 +41,82 @@ customer profile. The separate SMS/Messenger TMBG booking demo is not selected.
 Messages sent directly to Telegram's `sendMessage` API bypass this application
 and are not added to its history or campaign workflow. Incoming replies still use
 dealership context, but the assistant cannot see that externally sent campaign
-text. Use the campaign-start endpoint below to retain the approved opener as
-conversation context instead of calling Telegram's API directly.
+text. Use the direct-send or campaign-start endpoint below to retain outgoing
+messages as conversation context instead of calling Telegram's API directly.
+
+## Repeatable demo sends, equivalent to the SMS messages API
+
+Use `POST http://localhost:8080/api/v1/telegram/messages` (alias: `/api/v1/telegram/send`)
+for independent sends. This matches the intent of `/api/v1/sms/messages` and
+`/api/v1/sms/send`: a new idempotency key authorizes a new message, even for the
+same recipient and identical text. It does not start or restart a managed
+campaign, so a previous campaign's `COMPLETED` status does not prevent sending.
+
+The route uses the existing local/test outbound settings and bearer token:
+`TELEGRAM_ENABLED=true`, `TELEGRAM_CAMPAIGN_ENABLED=true`,
+`TELEGRAM_CAMPAIGN_API_TOKEN` and `TELEGRAM_CAMPAIGN_ALLOWED_RECIPIENTS`.
+Omit `content` to have the application render the approved dealership opener
+using the linked customer's name, vehicle, renewal details and campaign context.
+This uses the default `opening` allowlist entry and does not require `custom`.
+It uses the same campaign snapshot as the dealership assistant's subsequent
+replies, or the configured dealership campaign when no snapshot exists.
+
+In Postman use Bearer Token with `TELEGRAM_CAMPAIGN_API_TOKEN`, raw JSON and these
+headers. `{{$guid}}` generates a new key per send; for a retry of an uncertain
+request, reuse its original resolved key instead.
+
+```http
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+```
+
+```json
+{
+  "recipient": "<numeric-chat-id>"
+}
+```
+
+There is no LLM call to compose the opener: the approved script is personalized
+by the existing dealership template renderer, as in the managed campaign flow.
+The exact rendered text is saved in history. Each fresh key sends it again for
+demo purposes, even after a previous managed campaign completed.
+
+For an explicit manual message, supply `content` (for example, `"Hello World"`).
+That mode requires appending `custom` to the script allowlist and restarting:
+
+```dotenv
+TELEGRAM_CAMPAIGN_ALLOWED_SCRIPTS=opening,followup1,followup2,script1,script3,custom
+```
+
+`content` may be omitted or null for the approved opener. Empty or whitespace-only
+content is rejected. Missing required customer template details also return 400
+without making a Telegram request.
+
+There is no `customerId` field: the API uses the chat's existing verified,
+consenting customer identity. The customer must already have messaged the bot
+and been linked, for example by the campaign-start flow described below. Opt-outs
+still block outbound messages. Optional `accountId` must be the configured bot's
+numeric ID, not an SMS gateway account ID; omitting it selects that bot.
+
+Successful sends return HTTP 202 with an application message ID, status
+`ACCEPTED_BY_PROVIDER`, `replay=false` and Telegram's `providerMessageId`.
+Telegram submission happens synchronously, so this route does not report the SMS
+queue's `QUEUED` state or imply recipient delivery. Repeating a successful request
+with the same key returns the same IDs with `replay=true` and makes no provider
+call; the same key with different content returns 409. Use a new key for each
+intentional additional message.
+
+The outgoing message is stored in dealership history before submission, with the
+provider outcome recorded afterward. The next customer reply can use its content
+as context. Existing campaign state, bookings and opt-out state are retained.
+Messages are plain text, at most 4096 characters. The 16 KiB request limit and
+bounded process-local idempotency policy also apply to direct sends, with a
+separate request cache from campaign starts. Timeout/network/invalid-response
+outcomes are recorded as `UNKNOWN` and are never automatically resent. Such keys
+remain reserved until process restart; inspect the customer history through the
+admin API before deciding how to proceed. Completed cache entries expire using
+the configured TTL. Restarting clears both request caches, so do not rely on
+them for production delivery or replay protection across restarts.
 
 ## Start a dealership campaign from Postman
 
@@ -173,8 +247,8 @@ The Telegram-specific Spring Security chain requires exactly one
 `X-Telegram-Bot-Api-Secret-Token` header on `POST /webhooks/telegram`, authenticates
 before reading the body, and bounds declared and streamed body sizes. It applies
 only to this path. When disabled, the application's existing security rules apply.
-Outbound campaign requests use the separately authenticated local/test endpoint
-described above; the webhook secret does not authorize campaign requests.
+Outbound requests use the separately authenticated local/test endpoints
+described above; the webhook secret does not authorize outbound requests.
 
 | Webhook result | HTTP response |
 | --- | --- |

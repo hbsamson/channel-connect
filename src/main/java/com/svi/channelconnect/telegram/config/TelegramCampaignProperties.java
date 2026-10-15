@@ -25,7 +25,7 @@ public record TelegramCampaignProperties(
 		@NotBlank @Size(min = 32, max = 256) @Pattern(regexp = "[A-Za-z0-9_-]+") String apiToken,
 		@NotEmpty Set<@Pattern(regexp = "[1-9][0-9]{0,18}(:[1-9][0-9]{0,18})?") String> allowedRecipients,
 		@DefaultValue({"opening", "followup1", "followup2", "script1", "script3"})
-		@NotEmpty Set<@Pattern(regexp = "opening|followup1|followup2|script1|script3") String> allowedScripts,
+		@NotEmpty Set<@Pattern(regexp = "opening|followup1|followup2|script1|script3|custom") String> allowedScripts,
 		@DefaultValue("1000") @Min(1) @Max(100000) int idempotencyCapacity,
 		@DefaultValue("24h") @NotNull Duration idempotencyTtl
 ) {

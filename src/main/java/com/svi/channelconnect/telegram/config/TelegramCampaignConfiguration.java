@@ -21,11 +21,16 @@ import com.svi.channelconnect.dealership.config.DemoConfiguration;
 import com.svi.channelconnect.dealership.persistence.DealershipRepository;
 import com.svi.channelconnect.dealership.service.CampaignService;
 import com.svi.channelconnect.dealership.service.CampaignTemplates;
+import com.svi.channelconnect.telegram.dto.request.TelegramOutboundMessageRequest;
+import com.svi.channelconnect.telegram.dto.response.TelegramOutboundMessageResponse;
 import com.svi.channelconnect.telegram.security.TelegramCampaignFilter;
 import com.svi.channelconnect.telegram.service.TelegramCampaignIdempotencyStore;
 import com.svi.channelconnect.telegram.service.TelegramCampaignPolicy;
 import com.svi.channelconnect.telegram.service.TelegramCampaignService;
 import com.svi.channelconnect.telegram.service.TelegramIdentityLinker;
+import com.svi.channelconnect.telegram.service.TelegramMessagingChannel;
+import com.svi.channelconnect.telegram.service.TelegramOutboundMessageService;
+import com.svi.channelconnect.telegram.service.TelegramRequestIdempotencyStore;
 
 @Configuration(proxyBeanMethods = false)
 @Profile({"local", "test"})
@@ -56,6 +61,20 @@ public class TelegramCampaignConfiguration {
 	}
 
 	@Bean
+	TelegramRequestIdempotencyStore<TelegramOutboundMessageRequest, TelegramOutboundMessageResponse> telegramOutboundMessageRequests(
+			TelegramCampaignProperties properties, Clock clock) {
+		return new TelegramRequestIdempotencyStore<>(properties, clock);
+	}
+
+	@Bean
+	TelegramOutboundMessageService telegramOutboundMessageService(DealershipRepository customers, CampaignService campaigns,
+			TelegramCampaignPolicy policy, TelegramMessagingChannel channel,
+			TelegramRequestIdempotencyStore<TelegramOutboundMessageRequest, TelegramOutboundMessageResponse> requests, Clock clock,
+			DemoConfiguration configuration, DealershipProperties dealership, CampaignTemplates templates) {
+		return new TelegramOutboundMessageService(customers, campaigns, policy, channel, requests, clock, configuration, dealership, templates);
+	}
+
+	@Bean
 	TelegramCampaignFilter telegramCampaignFilter(TelegramCampaignProperties properties) {
 		return new TelegramCampaignFilter(properties);
 	}
@@ -70,12 +89,13 @@ public class TelegramCampaignConfiguration {
 	@Bean
 	@Order(2)
 	SecurityFilterChain telegramCampaignSecurityFilterChain(HttpSecurity http, TelegramCampaignFilter filter) throws Exception {
-		return http.securityMatcher("/api/v1/telegram/campaign/start")
+		return http.securityMatcher("/api/v1/telegram/campaign/start", "/api/v1/telegram/messages", "/api/v1/telegram/send")
 				.csrf(csrf -> csrf.disable())
 				.requestCache(cache -> cache.disable())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(authorize -> authorize
-						.requestMatchers(HttpMethod.POST, "/api/v1/telegram/campaign/start").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/telegram/campaign/start",
+								"/api/v1/telegram/messages", "/api/v1/telegram/send").permitAll()
 						.anyRequest().denyAll())
 				.addFilterBefore(filter, AuthorizationFilter.class)
 				.build();
