@@ -24,6 +24,43 @@ import com.svi.channelconnect.support.SmsTestProperties;
 class SmsPersistenceTests {
 	@TempDir Path directory;
 	private final Clock clock = Clock.fixed(Instant.parse("2026-10-14T00:00:00Z"), ZoneOffset.UTC);
+	@Test void archivesRemoteHistoryWithoutQueuingRepliesAndAppliesRetention() {
+		try (var ds = datasource("jdbc:h2:mem:smsarchive;DB_CLOSE_DELAY=-1")) {
+			Flyway.configure().dataSource(ds).locations("classpath:db/migration").load().migrate();
+			var store = repository(ds);
+			var tx = transaction(ds);
+			assertThat(tx.<Boolean>execute(status -> store.archiveRemote("sim-1", 100, "TESTBANK", "Historical message", clock.millis()))).isTrue();
+			assertThat(tx.<Boolean>execute(status -> store.archiveRemote("sim-1", 100, "TESTBANK", "Historical message", clock.millis()))).isFalse();
+			assertThat(store.inboundBacklog()).isZero();
+			assertThat(store.pendingInbound()).isEmpty();
+			assertThat(store.inbox(java.util.List.of("sim-1"), null, 0, 100).getFirst().status()).isEqualTo("STORED");
+			JdbcClient.create(ds).sql("UPDATE sms_inbox SET received_at = ?").param(clock.millis() - java.time.Duration.ofDays(31).toMillis()).update();
+			tx.executeWithoutResult(status -> store.maintain());
+			assertThat(store.inbox(java.util.List.of("sim-1"), null, 0, 100)).isEmpty();
+		}
+	}
+	@Test void listsRetainedInboxAcrossAccountsWithoutExposingOtherRoutesOrExpiredContent() {
+		try (var ds = datasource("jdbc:h2:mem:smsinboxlisting;DB_CLOSE_DELAY=-1")) {
+			Flyway.configure().dataSource(ds).locations("classpath:db/migration").load().migrate();
+			var store = repository(ds);
+			transaction(ds).executeWithoutResult(status -> {
+				store.acceptRemote("sim-1", 1, "+639000000001", "First", 200);
+				store.acceptRemote("sim-2", 2, "+639000000002", "Second", 100);
+				store.acceptRemote("unconfigured", 3, "+639000000001", "Other route", 300);
+				store.acceptRemote("sim-1", 4, "+639000000001", "Expired", 400);
+			});
+			var db = JdbcClient.create(ds);
+			db.sql("UPDATE sms_inbox SET status = 'PROCESSED' WHERE receive_id = 1").update();
+			db.sql("UPDATE sms_inbox SET content = NULL WHERE receive_id = 4").update();
+			var accounts = java.util.List.of("sim-1", "sim-2");
+			var all = store.inbox(accounts, null, 0, 100);
+			assertThat(all).extracting(com.svi.channelconnect.sms.dto.response.SmsInboxResponse.Message::content).containsExactly("First", "Second");
+			assertThat(all).extracting(com.svi.channelconnect.sms.dto.response.SmsInboxResponse.Message::accountId).containsExactly("sim-1", "sim-2");
+			assertThat(store.inbox(accounts, null, all.getFirst().cursor(), 1)).containsExactly(all.getLast());
+			assertThat(store.inbox(accounts, "+639000000002", 0, 100)).containsExactly(all.getLast());
+			assertThat(store.inbox(java.util.List.of("sim-1"), null, 0, 100)).containsExactly(all.getFirst());
+		}
+	}
 	@Test void survivesDatabaseReopenAndRetainsUnknownIdempotencyTombstones() {
 		String url = "jdbc:h2:file:" + directory.resolve("sms").toString().replace('\\', '/') + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;WRITE_DELAY=0";
 		String[] ids = new String[2];

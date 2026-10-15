@@ -30,7 +30,7 @@ import com.svi.channelconnect.sms.provider.SmsProvider;
 /** Implements the supplied Postman PHP gateway requests without retrying uncertain submissions. */
 @Component
 @ConditionalOnProperty(name = "sms.enabled", havingValue = "true")
-@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP_API'")
+@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP_API' || ('${sms.mode:MOCK}' == 'HTTP' && ${sms.http-api.receive-enabled:false})")
 public class GoipHttpApiClient {
 	private final GoipHttpApiProperties properties;
 	private final SmsProperties smsProperties;
@@ -41,7 +41,9 @@ public class GoipHttpApiClient {
 		this(properties, smsProperties, HttpClient.newBuilder().connectTimeout(smsProperties.sessionTimeout()).build());
 	}
 	GoipHttpApiClient(GoipHttpApiProperties properties, SmsProperties smsProperties, HttpClient client) {
-		if (properties.sendUrl() == null) throw new IllegalArgumentException("SMS HTTP API requires a configured send URL");
+		if (smsProperties.mode() == SmsProperties.Mode.HTTP_API && properties.sendUrl() == null) {
+			throw new IllegalArgumentException("SMS HTTP API requires a configured send URL");
+		}
 		if (properties.receiveUrl() != null && properties.receiveKey().isBlank()) {
 			throw new IllegalArgumentException("SMS HTTP API requires a receive key when its receive URL is configured");
 		}
@@ -51,6 +53,7 @@ public class GoipHttpApiClient {
 	}
 
 	public SmsProvider.Result send(int line, String number, String message, Runnable beforeTransmission) {
+		if (properties.sendUrl() == null) throw new IllegalStateException("SMS HTTP API send URL is not configured");
 		String query = "line=" + encode(Integer.toString(line)) + "&message=" + encode(message) + "&number=" + encode(number);
 		HttpRequest request = request(properties.sendUrl(), query).POST(HttpRequest.BodyPublishers.noBody()).build();
 		beforeTransmission.run();

@@ -1,5 +1,6 @@
 package com.svi.channelconnect.sms.service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,6 +16,7 @@ import org.springframework.web.context.request.async.DeferredResult;
 
 import com.svi.channelconnect.sms.config.SmsProperties;
 import com.svi.channelconnect.sms.dto.response.SmsReceiveResponse;
+import com.svi.channelconnect.sms.dto.response.SmsInboxResponse;
 import com.svi.channelconnect.sms.exception.SmsException;
 import com.svi.channelconnect.sms.persistence.SmsMessageRepository;
 
@@ -56,6 +58,23 @@ public class SmsReceiveService {
 		// A receipt may have committed between the first read and registering this waiter.
 		complete(id, poll, false);
 		return result;
+	}
+
+	public SmsInboxResponse receiveAll(String account, String sender, long after, int limit) {
+		if (after < 0 || limit < 1 || limit > 100) throw new SmsException(SmsException.Reason.INVALID);
+		List<String> accounts;
+		if (account == null) {
+			accounts = properties.channels().stream().map(SmsProperties.Channel::accountId).toList();
+		} else {
+			try { accounts = List.of(properties.channel(account).accountId()); }
+			catch (IllegalArgumentException exception) { throw new SmsException(SmsException.Reason.FORBIDDEN); }
+		}
+		String participant = sender == null ? null : SmsValidation.phone(sender);
+		var received = messages.inbox(accounts, participant, after, limit + 1);
+		boolean hasMore = received.size() > limit;
+		var page = hasMore ? received.subList(0, limit) : received;
+		long cursor = page.isEmpty() ? after : page.getLast().cursor();
+		return new SmsInboxResponse(page, cursor, hasMore);
 	}
 
 	@Scheduled(fixedDelayString = "${sms.receive-poll-delay-ms:250}")

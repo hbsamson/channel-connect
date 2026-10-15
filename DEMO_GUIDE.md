@@ -12,7 +12,7 @@ Use Java 25 and the checked-in Maven wrapper. From the repository root, in the f
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1
 ```
 
-The launcher explicitly loads nonempty `.env` entries without evaluating them, activates `local,demo`, and selects deterministic mock AI. Spring itself does not load `.env`. Demo HTTP binds to `127.0.0.1:8080`; use an authenticated tunnel if testing real webhooks remotely.
+The launcher explicitly loads nonempty `.env` entries without evaluating them, activates `local,demo`, and selects deterministic mock AI. The `local` profile also imports repository-root `.env` for direct Maven and IntelliJ runs. Demo HTTP binds to `127.0.0.1:8080`; use an authenticated tunnel if testing real webhooks remotely.
 
 In a second terminal:
 

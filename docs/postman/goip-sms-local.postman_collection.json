@@ -1,67 +1,153 @@
 {
   "info": {
-    "name": "Channel Connect - local GoIP SMS",
-    "description": "Loopback simulator testing only. Set private bearer/admin credentials and run local,demo,sms-mock. No physical gateway endpoint is configured.",
+    "name": "Channel Connect - SMS API",
+    "description": "Only SMS send and receive requests against Channel Connect. Set smsApiToken to SMS_API_TOKEN, testRecipient to the approved mobile number, and accountId to the configured SIM for send and new-message polling. Receive-all lists retained application inbox history across configured SIMs; optionally add accountId or sender. It returns bounded pages: set inboxCursor manually to nextCursor for the next page when hasMore=true; leave it at 0 to keep viewing the start of the inbox. It never advances automatically. receiveCursor is separate and tracks new-message polling. The local inbox includes only imported messages with retained content, not the entire remote gateway inbox. HTTP web-form sending can use hosted inbox polling with SMS_GOIP_API_RECEIVE_ENABLED=true and the configured receive URL/key, or a separate UDP listener. 202 means queued, not delivered.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://127.0.0.1:8080" },
-    { "key": "accountId", "value": "mock-sim-1" },
-    { "key": "testRecipient", "value": "+639000000001" },
-    { "key": "smsApiToken", "value": "" },
-    { "key": "adminUsername", "value": "" },
-    { "key": "adminPassword", "value": "" },
-    { "key": "idempotencyKey", "value": "local-sms-test-1" },
-    { "key": "messageId", "value": "" },
-    { "key": "receiveCursor", "value": "0" }
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8080"
+    },
+    {
+      "key": "accountId",
+      "value": "goip-line-1"
+    },
+    {
+      "key": "testRecipient",
+      "value": ""
+    },
+    {
+      "key": "smsApiToken",
+      "value": ""
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "messageId",
+      "value": ""
+    },
+    {
+      "key": "receiveCursor",
+      "value": "0"
+    },
+    {
+      "key": "inboxCursor",
+      "value": "0"
+    }
   ],
   "item": [
     {
       "name": "01 - Send SMS - queued",
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 202) pm.collectionVariables.set('messageId', pm.response.json().messageId);"] } }],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (!pm.variables.get(\"smsApiToken\")) throw new Error(\"Set smsApiToken to SMS_API_TOKEN.\");",
+              "if (!pm.variables.get(\"testRecipient\")) throw new Error(\"Set testRecipient to the approved mobile number.\");",
+              "if (!pm.variables.get(\"idempotencyKey\")) pm.variables.set(\"idempotencyKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"SMS accepted for queueing\", function () { pm.response.to.have.status(202); });",
+              "if (pm.response.code === 202) { const body = pm.response.json(); pm.test(\"Submission has messageId and status\", function () { pm.expect(body.messageId).to.be.a(\"string\"); pm.expect(body.status).to.be.a(\"string\"); }); pm.collectionVariables.set(\"messageId\", body.messageId); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
       "request": {
         "method": "POST",
-        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{smsApiToken}}", "type": "string" }] },
-        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }],
-        "body": { "mode": "raw", "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"recipient\": \"{{testRecipient}}\",\n  \"content\": \"Local protocol test\"\n}" },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{smsApiToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"recipient\": \"{{testRecipient}}\",\n  \"content\": \"GoIP SMS test\"\n}"
+        },
         "url": "{{baseUrl}}/api/v1/sms/send"
       }
     },
     {
-      "name": "02 - Get SMS status - delivery unconfirmed",
-      "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{smsApiToken}}", "type": "string" }] }, "url": "{{baseUrl}}/api/v1/sms/messages/{{messageId}}" }
-    },
-    {
-      "name": "03 - Channel registrations",
-      "request": { "method": "GET", "auth": { "type": "basic", "basic": [{ "key": "username", "value": "{{adminUsername}}", "type": "string" }, { "key": "password", "value": "{{adminPassword}}", "type": "string" }] }, "url": "{{baseUrl}}/api/admin/sms/channels" }
-    },
-    {
-      "name": "04 - Simulate inbound SMS through UDP",
+      "name": "02 - Receive new messages",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) pm.collectionVariables.set('receiveCursor', String(pm.response.json().nextCursor));"
+            ]
+          }
+        }
+      ],
       "request": {
-        "method": "POST",
-        "auth": { "type": "basic", "basic": [{ "key": "username", "value": "{{adminUsername}}", "type": "string" }, { "key": "password", "value": "{{adminPassword}}", "type": "string" }] },
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"sender\": \"{{testRecipient}}\",\n  \"content\": \"What are your opening hours?\"\n}" },
-        "url": "{{baseUrl}}/api/admin/sms/simulator/receive"
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{smsApiToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/sms/receive?accountId={{accountId}}&after={{receiveCursor}}&waitSeconds=25"
       }
     },
     {
-      "name": "05 - Read-only line state",
-      "request": { "method": "GET", "auth": { "type": "basic", "basic": [{ "key": "username", "value": "{{adminUsername}}", "type": "string" }, { "key": "password", "value": "{{adminPassword}}", "type": "string" }] }, "url": "{{baseUrl}}/api/admin/sms/channels/{{accountId}}/query" }
-    },
-    {
-      "name": "06 - Receive new SMS - cursor poll",
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 200) pm.collectionVariables.set('receiveCursor', String(pm.response.json().nextCursor));"] } }],
-      "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{smsApiToken}}", "type": "string" }] }, "url": "{{baseUrl}}/api/v1/sms/receive?accountId={{accountId}}&after={{receiveCursor}}&waitSeconds=25" }
-    },
-    {
-      "name": "07 - Start canned bulk campaign - linked customers",
+      "name": "03 - Receive all inbox history",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Inbox available\", function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { const body = pm.response.json(); pm.test(\"Inbox page includes messages and hasMore\", function () { pm.expect(body.messages).to.be.an(\"array\"); pm.expect(body.hasMore).to.be.a(\"boolean\"); }); }"
+            ]
+          }
+        }
+      ],
       "request": {
-        "method": "POST",
-        "auth": { "type": "basic", "basic": [{ "key": "username", "value": "{{adminUsername}}", "type": "string" }, { "key": "password", "value": "{{adminPassword}}", "type": "string" }] },
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"customerIds\": [\"demo-renewal\", \"demo-booking\"],\n  \"baseChannel\": \"SMS\",\n  \"openingScript\": \"script3\"\n}" },
-        "url": "{{baseUrl}}/api/admin/demo/campaigns/bulk"
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{smsApiToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/sms/receive-all?after={{inboxCursor}}&limit=100"
       }
     }
   ]

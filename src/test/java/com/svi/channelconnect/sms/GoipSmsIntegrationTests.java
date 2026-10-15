@@ -197,6 +197,26 @@ class GoipSmsIntegrationTests {
 		verifyNoInteractions(ai);
 		await(() -> messages.outboundBacklog() == 0, true);
 	}
+	@Test void exposesWholeInboxSeparatelyFromPolling() throws Exception {
+		mvc.perform(get("/api/v1/sms/receive-all")).andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/v1/sms/receive-all").header("Authorization", "Bearer test-sms-api-token"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.messages").isEmpty()).andExpect(jsonPath("$.hasMore").value(false));
+		messages.acceptRemote("sim-1", 800001, "+639000000001", "First", 200);
+		messages.acceptRemote("sim-2", 800002, "+639000000002", "Second", 100);
+		db.sql("UPDATE sms_inbox SET status = 'PROCESSED' WHERE receive_id IN (800001, 800002)").update();
+		mvc.perform(get("/api/v1/sms/receive-all").header("Authorization", "Bearer test-sms-api-token").param("limit", "1"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.messages.length()").value(1))
+				.andExpect(jsonPath("$.messages[0].accountId").value("sim-1")).andExpect(jsonPath("$.hasMore").value(true));
+		mvc.perform(get("/api/v1/sms/receive-all").header("Authorization", "Bearer test-sms-api-token").param("accountId", "sim-2"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.messages.length()").value(1))
+				.andExpect(jsonPath("$.messages[0].content").value("Second"));
+		mvc.perform(get("/api/v1/sms/receive-all").header("Authorization", "Bearer test-sms-api-token").param("accountId", "unknown"))
+				.andExpect(status().isForbidden());
+		mvc.perform(get("/api/v1/sms/receive-all").header("Authorization", "Bearer test-sms-api-token").param("limit", "101"))
+				.andExpect(status().isBadRequest());
+		mvc.perform(get("/api/v1/sms/receive-all").header("Authorization", "Bearer test-sms-api-token").param("after", "bad"))
+				.andExpect(status().isBadRequest());
+	}
 	@Test void pollsReceiptsByCursorWithoutConsumingOrReprocessingThem() throws Exception {
 		mvc.perform(get("/api/v1/sms/receive").param("accountId", "sim-1")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/v1/sms/receive").header("Authorization", "Bearer test-sms-api-token").param("accountId", "sim-1").param("after", "bad"))

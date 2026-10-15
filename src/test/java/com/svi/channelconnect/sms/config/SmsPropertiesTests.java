@@ -9,6 +9,33 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 import com.svi.channelconnect.support.SmsTestProperties;
 
 class SmsPropertiesTests {
+	@Test void providerProfileOverridesLocalEnvironmentDefaults(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+		java.nio.file.Path environmentFile = directory.resolve(".env");
+		java.nio.file.Files.writeString(environmentFile, "SMS_ENABLED=true\nSMS_PROVIDER_MODE=MOCK\nSMS_LIVE_AUTHORIZED=false\n");
+		for (String name : java.util.List.of("application.properties", "application-local.properties", "application-sms-http-api.properties")) {
+			try (var resource = getClass().getResourceAsStream("/" + name)) {
+				String content = new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+						.replace("optional:file:./.env[.properties]", "optional:" + environmentFile.toUri() + "[.properties]");
+				java.nio.file.Files.writeString(directory.resolve(name), content);
+			}
+		}
+		new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+				.withInitializer(new org.springframework.boot.test.context.ConfigDataApplicationContextInitializer())
+				.withPropertyValues("spring.config.location=" + directory.toUri(), "spring.profiles.active=local,sms-http-api")
+				.run(context -> {
+					var properties = Binder.get(context.getEnvironment()).bind("sms", SmsProperties.class).get();
+					assertThat(properties.mode()).isEqualTo(SmsProperties.Mode.HTTP_API);
+					assertThat(properties.liveAuthorized()).isTrue();
+				});
+	}
+	@Test void explainsConfigurationFailuresWithoutPrintingValues() {
+		assertThatThrownBy(() -> SmsTestProperties.properties(Map.of("sms.mode", "HTTP_API")))
+				.hasRootCauseMessage("Invalid SMS configuration: HTTP_API requires live-authorized=true");
+		assertThatThrownBy(() -> SmsTestProperties.properties(Map.of("sms.session-timeout", "91s")))
+				.hasRootCauseMessage("Invalid SMS configuration: session-timeout must not exceed 90s");
+		assertThatThrownBy(() -> SmsTestProperties.properties(Map.of("sms.id-retention", "1d")))
+				.hasRootCauseMessage("Invalid SMS configuration: id-retention must be at least content-retention");
+	}
 	@Test void defaultsToDisabledWithoutRequiringCredentials() {
 		SmsProperties properties = new Binder(new MapConfigurationPropertySource(Map.of("sms.enabled", "false"))).bind("sms", SmsProperties.class).get();
 		assertThat(properties.enabled()).isFalse(); assertThat(properties.mode()).isEqualTo(SmsProperties.Mode.MOCK);

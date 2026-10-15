@@ -1,4 +1,9 @@
-param([switch]$UseOpenAI, [switch]$NoEnv)
+param(
+	[switch]$UseOpenAI,
+	[switch]$NoEnv,
+	[ValidateNotNullOrEmpty()]
+	[string]$Profiles = 'local,demo'
+)
 
 $ErrorActionPreference = 'Stop'
 $repoDirectory = Split-Path -Parent $PSScriptRoot
@@ -18,6 +23,6 @@ if (-not $NoEnv -and (Test-Path -LiteralPath '.env')) {
 	}
 }
 $env:AI_PROVIDER = if ($UseOpenAI) { 'openai' } else { 'mock' }
-Write-Host "Starting local dealership demo; AI provider: $env:AI_PROVIDER. SMS and Telegram are simulated."
-& .\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo' '-Dspring-boot.run.arguments=--debug=false'
+Write-Host "Starting dealership demo; profiles: $Profiles; AI provider: $env:AI_PROVIDER. SMS provider depends on the selected profiles and configuration; Telegram is simulated."
+& .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=$Profiles" '-Dspring-boot.run.arguments=--debug=false'
 if ($LASTEXITCODE -ne 0) { throw 'Demo application startup failed.' }

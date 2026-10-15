@@ -91,6 +91,33 @@ class GoipHttpApiClientTests {
 	}
 
 	@Test
+	void combinesDirectSendingWithAReceiveOnlyHostedClient() throws Exception {
+		var properties = smsProperties(Map.of("sms.mode", "HTTP", "sms.channels[0].source-address", "192.168.1.20",
+				"sms.channels[1].source-address", "192.168.1.20"));
+		var api = new GoipHttpApiProperties(null, endpoint, "synthetic-receive-key", 1048576, null);
+		new ApplicationContextRunner().withPropertyValues("sms.enabled=true", "sms.mode=HTTP", "sms.http-api.receive-enabled=true")
+				.withBean(com.svi.channelconnect.sms.config.SmsProperties.class, () -> properties)
+				.withBean(GoipHttpApiProperties.class, () -> api)
+				.withBean(com.svi.channelconnect.sms.persistence.SmsMessageRepository.class, () -> mock(com.svi.channelconnect.sms.persistence.SmsMessageRepository.class))
+				.withBean(com.svi.channelconnect.dealership.persistence.DealershipRepository.class, () -> mock(com.svi.channelconnect.dealership.persistence.DealershipRepository.class))
+				.withBean(tools.jackson.databind.ObjectMapper.class, tools.jackson.databind.ObjectMapper::new)
+				.withBean(io.micrometer.core.instrument.MeterRegistry.class, io.micrometer.core.instrument.simple.SimpleMeterRegistry::new)
+				.withBean(java.time.Clock.class, java.time.Clock::systemUTC)
+				.withUserConfiguration(GoipHttpApiClient.class, GoipHttpApiSmsProvider.class, GoipHttpSmsProvider.class, GoipHttpApiReceivePoller.class)
+				.run(context -> {
+					assertThat(context).hasSingleBean(SmsProvider.class).hasSingleBean(GoipHttpApiClient.class).hasSingleBean(GoipHttpApiReceivePoller.class);
+					assertThat(context.getBean(SmsProvider.class)).isInstanceOf(GoipHttpSmsProvider.class);
+				});
+		var client = new GoipHttpApiClient(api, properties);
+		assertThat(client.receive().statusCode()).isEqualTo(200);
+		assertThat(method.get()).isEqualTo("GET");
+		assertThat(parameters(query.get())).containsEntry("action", "message");
+		assertThatThrownBy(() -> client.send(1, "09000000001", "Must not send", () -> {}))
+				.isInstanceOf(IllegalStateException.class).hasMessage("SMS HTTP API send URL is not configured");
+		assertThat(requestCount.get()).isEqualTo(1);
+	}
+
+	@Test
 	void retrievesReceiveSnapshotWithEncodedPrivateKeyAndRedactedRendering() throws Exception {
 		responseBody.set("{\"success\":true,\"count\":0,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
 		var client = new GoipHttpApiClient(apiProperties(1048576), smsProperties(Map.of()));

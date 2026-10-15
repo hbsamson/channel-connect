@@ -77,7 +77,7 @@ class GoipHttpApiReceivePollerTests {
 	}
 
 	@Test
-	void skipsHistoricBankUnknownLineAndUnverifiedUnconsentedOrUnknownClients() throws Exception {
+	void archivesHistoricBankAndUnlinkedMessagesWithoutReplyingAndSkipsOtherGateways() throws Exception {
 		var wrongDevice = entry(3, 1, CUSTOMER_PHONE, "Unconfigured", NOW.plusSeconds(1));
 		wrongDevice.put("goip_id", "other-device");
 		when(customers.identity("SMS", "sim-1", "+639000000002")).thenReturn(Optional.empty());
@@ -97,6 +97,9 @@ class GoipHttpApiReceivePollerTests {
 				entry(8, 1, "+639000000005", "Not permitted", NOW.plusSeconds(1))));
 		poller.poll();
 		verify(messages, never()).acceptRemote(anyString(), anyLong(), anyString(), anyString(), anyLong());
+		verify(messages).archiveRemote("sim-1", 1, CUSTOMER_PHONE, "Old reply", NOW.minusSeconds(1).toEpochMilli());
+		verify(messages).archiveRemote("sim-1", 2, "SYNTHETICBANK", "Synthetic OTP", NOW.plusSeconds(1).toEpochMilli());
+		verify(messages, times(6)).archiveRemote(anyString(), anyLong(), anyString(), anyString(), anyLong());
 		verify(customers, never()).identity("SMS", "sim-1", "SYNTHETICBANK");
 	}
 

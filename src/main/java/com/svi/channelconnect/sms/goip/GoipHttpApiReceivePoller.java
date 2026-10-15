@@ -35,10 +35,10 @@ import com.svi.channelconnect.sms.exception.SmsException;
 import com.svi.channelconnect.sms.persistence.SmsMessageRepository;
 import com.svi.channelconnect.sms.service.SmsValidation;
 
-/** Imports fresh campaign-client replies from the remote gateway's snapshot API. */
+/** Retains the hosted inbox; only eligible fresh customer replies enter conversation processing. */
 @Component
 @ConditionalOnProperty(name = "sms.enabled", havingValue = "true")
-@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP_API'")
+@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP_API' || ('${sms.mode:MOCK}' == 'HTTP' && ${sms.http-api.receive-enabled:false})")
 public class GoipHttpApiReceivePoller {
 	private static final Logger LOGGER = LoggerFactory.getLogger(GoipHttpApiReceivePoller.class);
 	private static final int MAX_SNAPSHOT_MESSAGES = 1000;
@@ -106,8 +106,9 @@ public class GoipHttpApiReceivePoller {
 			received.sort(Comparator.comparing(RemoteMessage::receivedAt).thenComparingLong(RemoteMessage::receiveId));
 			for (RemoteMessage message : received) {
 				try {
-					boolean accepted = messages.acceptRemote(message.accountId(), message.receiveId(), message.sender(),
-							message.content(), message.receivedAt().toEpochMilli());
+					boolean accepted = message.processReply()
+							? messages.acceptRemote(message.accountId(), message.receiveId(), message.sender(), message.content(), message.receivedAt().toEpochMilli())
+							: messages.archiveRemote(message.accountId(), message.receiveId(), message.sender(), message.content(), message.receivedAt().toEpochMilli());
 					result(accepted ? "accepted" : "duplicate");
 				} catch (SmsException exception) {
 					if (exception.reason() == SmsException.Reason.CAPACITY) {
@@ -149,7 +150,7 @@ public class GoipHttpApiReceivePoller {
 
 	private RemoteMessage eligible(JsonNode entry) {
 		Instant receivedAt = OffsetDateTime.parse(text(entry, "received_at")).toInstant();
-		if (receivedAt.toEpochMilli() < receivedFrom) { result("historic"); return null; }
+		boolean fresh = receivedAt.toEpochMilli() >= receivedFrom;
 		String device = text(entry, "goip_id");
 		if (!entry.path("channel").isIntegralNumber() || !entry.path("channel").canConvertToInt()) throw new IllegalArgumentException("Invalid SMS line");
 		int line = entry.path("channel").intValue();
@@ -163,13 +164,17 @@ public class GoipHttpApiReceivePoller {
 			result("sim_mismatch");
 			return null;
 		}
-		String sender;
-		try { sender = SmsValidation.phone(text(entry, "from")); }
-		catch (SmsException exception) { result("nonphone_sender"); return null; }
-		var identity = customers.identity("SMS", route.accountId(), sender).orElse(null);
-		if (identity == null || !identity.verified() || !identity.consent() || !identity.outboundAllowed()) {
-			result("ineligible_sender");
-			return null;
+		String sender = text(entry, "from").trim();
+		boolean phone = true;
+		try { sender = SmsValidation.phone(sender); }
+		catch (SmsException exception) { phone = false; }
+		if (sender.isBlank() || sender.length() > 16 || sender.chars().anyMatch(Character::isISOControl)) {
+			throw new IllegalArgumentException("Invalid inbound SMS sender");
+		}
+		boolean processReply = false;
+		if (fresh && phone) {
+			var identity = customers.identity("SMS", route.accountId(), sender).orElse(null);
+			processReply = identity != null && identity.verified() && identity.consent() && identity.outboundAllowed();
 		}
 		long receiveId = Long.parseLong(text(entry, "recvid"));
 		if (receiveId < 1) throw new IllegalArgumentException("Invalid SMS receive ID");
@@ -179,7 +184,7 @@ public class GoipHttpApiReceivePoller {
 			throw new IllegalArgumentException("Invalid inbound SMS content");
 		}
 		// raw_packet, gateway metadata, remote hashes and other subscribers' details never leave the snapshot parser.
-		return new RemoteMessage(route.accountId(), receiveId, sender, content, receivedAt);
+		return new RemoteMessage(route.accountId(), receiveId, sender, content, receivedAt, processReply);
 	}
 
 	private static String text(JsonNode entry, String field) {
@@ -198,7 +203,7 @@ public class GoipHttpApiReceivePoller {
 		worker.shutdownNow();
 	}
 
-	private record RemoteMessage(String accountId, long receiveId, String sender, String content, Instant receivedAt) {
+	private record RemoteMessage(String accountId, long receiveId, String sender, String content, Instant receivedAt, boolean processReply) {
 		@Override public String toString() { return "RemoteSms[payload=<redacted>]"; }
 	}
 }

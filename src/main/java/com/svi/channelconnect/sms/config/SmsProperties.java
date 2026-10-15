@@ -40,14 +40,15 @@ public record SmsProperties(
 		if (mode == null || port < 0 || port > 65535 || maxSessions < 1 || maxSessions > 5
 				|| queueCapacity < 1 || queueCapacity > 100000 || maxContentBytes < 1 || maxContentBytes > 3000
 				|| maxSegments < 1 || maxSegments > 10 || maxPolls < 0 || maxPolls > 100
-				|| processingAttempts < 1 || processingAttempts > 10) invalid();
+				|| processingAttempts < 1 || processingAttempts > 10) invalid("mode or numeric limits are invalid");
 		for (Duration duration : List.of(registrationTimeout, sessionTimeout, packetTimeout, pollInterval,
 				processingRetryDelay, queueExpiry, contentRetention, idRetention, shutdownTimeout)) {
-			if (duration.isNegative() || duration.isZero()) invalid();
+			if (duration.isNegative() || duration.isZero()) invalid("timeouts, intervals and retention must be positive");
 		}
-		if (sessionTimeout.compareTo(Duration.ofSeconds(90)) > 0 || idRetention.compareTo(contentRetention) < 0) invalid();
+		if (sessionTimeout.compareTo(Duration.ofSeconds(90)) > 0) invalid("session-timeout must not exceed 90s");
+		if (idRetention.compareTo(contentRetention) < 0) invalid("id-retention must be at least content-retention");
 		if (enabled) {
-			if (channels.isEmpty() || channels.size() > 64) invalid();
+			if (channels.isEmpty() || channels.size() > 64) invalid("enabled SMS requires between 1 and 64 channels; activate an SMS provider profile");
 			Set<String> accounts = new HashSet<>();
 			Set<String> identities = new HashSet<>();
 			Set<String> simMappings = new HashSet<>();
@@ -55,19 +56,20 @@ public record SmsProperties(
 			for (Channel channel : channels) {
 				if (!accounts.add(channel.accountId()) || ((mode == Mode.MOCK || mode == Mode.LIVE)
 						&& !identities.add(address(channel.sourceAddress()).getHostAddress() + "/" + channel.authId()))
-						|| !simMappings.add(channel.deviceId() + "/" + channel.simChannel())) invalid();
+						|| !simMappings.add(channel.deviceId() + "/" + channel.simChannel())) invalid("channel accounts, UDP identities and device/SIM mappings must be unique");
 				String previous = deviceAddresses.putIfAbsent(channel.deviceId(), address(channel.sourceAddress()).getHostAddress());
-				if (previous != null && !previous.equals(address(channel.sourceAddress()).getHostAddress())) invalid();
-				if (mode == Mode.MOCK && !address(channel.sourceAddress()).isLoopbackAddress()) invalid();
+				if (previous != null && !previous.equals(address(channel.sourceAddress()).getHostAddress())) invalid("channels on one device must share a source-address");
+				if (mode == Mode.MOCK && !address(channel.sourceAddress()).isLoopbackAddress()) invalid("MOCK channel source-address must be loopback");
 			}
 			InetAddress bind = address(bindAddress);
-			if (mode == Mode.MOCK && !bind.isLoopbackAddress()) invalid();
+			if (mode == Mode.MOCK && !bind.isLoopbackAddress()) invalid("MOCK bind-address must be loopback");
 			if (mode == Mode.LIVE && (!liveAuthorized || port == 0 || bind.isAnyLocalAddress()
-					|| !(bind.isSiteLocalAddress() || bind.isLoopbackAddress()) || maxSegments != 1)) invalid();
-			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress())) invalid();
-			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> c.maxConcurrentSessions() != 1)) invalid();
-			if (mode == Mode.HTTP && (!liveAuthorized || channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress()))) invalid();
-			if (mode == Mode.HTTP_API && !liveAuthorized) invalid();
+					|| !(bind.isSiteLocalAddress() || bind.isLoopbackAddress()) || maxSegments != 1)) invalid("LIVE requires live-authorized=true, a nonzero port, a private or loopback bind-address and max-segments=1");
+			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress())) invalid("LIVE channel source-address must be a private IP address");
+			if (mode == Mode.LIVE && channels.stream().anyMatch(c -> c.maxConcurrentSessions() != 1)) invalid("LIVE channels require max-concurrent-sessions=1");
+			if (mode == Mode.HTTP && !liveAuthorized) invalid("HTTP requires live-authorized=true");
+			if (mode == Mode.HTTP && channels.stream().anyMatch(c -> !address(c.sourceAddress()).isSiteLocalAddress())) invalid("HTTP channel source-address must be a private IP address");
+			if (mode == Mode.HTTP_API && !liveAuthorized) invalid("HTTP_API requires live-authorized=true");
 		}
 	}
 
@@ -89,7 +91,7 @@ public record SmsProperties(
 		catch (Exception exception) { throw new IllegalArgumentException("Invalid SMS IP address"); }
 	}
 
-	private static void invalid() { throw new IllegalArgumentException("Invalid SMS configuration"); }
+	private static void invalid(String reason) { throw new IllegalArgumentException("Invalid SMS configuration: " + reason); }
 	@Override public String toString() { return "SmsProperties[enabled=" + enabled + ", mode=" + mode + ", credentials=<redacted>]"; }
 
 	public record Channel(String accountId, String deviceId, int simChannel, String sourceAddress, String authId,

@@ -149,7 +149,8 @@ class GoipHttpApiConversationTests {
 		assertThat(reply).contains("Genuine parts", "trained technicians", "quote", "Book a")
 				.doesNotContain("Please contact the dealership for the full response");
 		SmsValidation.content(reply, properties);
-		assertThat(db.sql("SELECT COUNT(*) FROM sms_inbox").query(Integer.class).single()).isEqualTo(1);
+		assertThat(db.sql("SELECT COUNT(*) FROM sms_inbox").query(Integer.class).single()).isEqualTo(3);
+		assertThat(db.sql("SELECT COUNT(*) FROM sms_inbox WHERE status = 'STORED'").query(Integer.class).single()).isEqualTo(2);
 		assertThat(db.sql("SELECT COUNT(*) FROM dealer_events WHERE event_type = 'SMS_RESPONSE_TOO_LONG'").query(Integer.class).single()).isZero();
 		assertThat(db.sql("SELECT COUNT(*) FROM sms_outbox WHERE status = 'UNKNOWN' AND error_code = 'HTTP_API_SUBMISSION_UNCONFIRMED'")
 				.query(Integer.class).single()).isEqualTo(2);
@@ -163,8 +164,11 @@ class GoipHttpApiConversationTests {
 		mvc.perform(get("/api/v1/sms/receive").param("accountId", "sim-2")).andExpect(status().isUnauthorized());
 		var received = mvc.perform(get("/api/v1/sms/receive").header("Authorization", "Bearer test-sms-api-token")
 				.param("accountId", "sim-2").param("waitSeconds", "0")).andExpect(request().asyncStarted()).andReturn();
-		mvc.perform(asyncDispatch(received)).andExpect(status().isOk()).andExpect(jsonPath("$.messages.length()").value(1))
-				.andExpect(jsonPath("$.messages[0].content").value(objection));
+		mvc.perform(asyncDispatch(received)).andExpect(status().isOk()).andExpect(jsonPath("$.messages.length()").value(3));
+		mvc.perform(get("/api/v1/sms/receive-all").header("Authorization", "Bearer test-sms-api-token"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.messages.length()").value(3))
+				.andExpect(jsonPath("$.messages[0].content").value("Historical reply must be ignored."))
+				.andExpect(jsonPath("$.messages[0].status").value("STORED"));
 	}
 
 	private static Map<String, Object> remoteMessage(String receiveId, String sender, String content, String timestamp) {

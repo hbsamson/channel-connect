@@ -39,7 +39,14 @@ public class SmsMessageRepository {
 	public boolean acceptRemote(String account, long receiveId, String sender, String content, long receivedAt) {
 		return acceptReceipt(account, receiveId, sender, content, receivedAt);
 	}
+	@Transactional
+	public boolean archiveRemote(String account, long receiveId, String sender, String content, long receivedAt) {
+		return acceptReceipt(account, receiveId, sender, content, receivedAt, false);
+	}
 	private boolean acceptReceipt(String account, long receiveId, String sender, String content, long receivedAt) {
+		return acceptReceipt(account, receiveId, sender, content, receivedAt, true);
+	}
+	private boolean acceptReceipt(String account, long receiveId, String sender, String content, long receivedAt, boolean processReply) {
 		lock();
 		String fingerprint = SmsValidation.fingerprint(sender, content);
 		var old = db.sql("SELECT fingerprint FROM sms_inbox WHERE account_id = ? AND receive_id = ?")
@@ -48,9 +55,9 @@ public class SmsMessageRepository {
 			if (!old.get().equals(fingerprint)) throw new SmsException(SmsException.Reason.CONFLICT);
 			return false;
 		}
-		if (inboundBacklog() >= properties.queueCapacity()) throw new SmsException(SmsException.Reason.CAPACITY);
-		db.sql("INSERT INTO sms_inbox(id, account_id, receive_id, sender, content, fingerprint, received_at, status, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?)")
-				.params(UUID.randomUUID().toString(), account, receiveId, sender, content, fingerprint, receivedAt, clock.millis()).update();
+		if (processReply && inboundBacklog() >= properties.queueCapacity()) throw new SmsException(SmsException.Reason.CAPACITY);
+		db.sql("INSERT INTO sms_inbox(id, account_id, receive_id, sender, content, fingerprint, received_at, status, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+				.params(UUID.randomUUID().toString(), account, receiveId, sender, content, fingerprint, receivedAt, processReply ? "RECEIVED" : "STORED", clock.millis()).update();
 		return true;
 	}
 	@Transactional
@@ -163,6 +170,13 @@ public class SmsMessageRepository {
 				.query((rs, row) -> new com.svi.channelconnect.sms.dto.response.SmsReceiveResponse.Message(rs.getLong(1),
 						rs.getString(2), rs.getLong(3), rs.getString(4), rs.getString(5), rs.getLong(6), rs.getString(7))).list();
 	}
+	public List<com.svi.channelconnect.sms.dto.response.SmsInboxResponse.Message> inbox(List<String> accounts, String sender, long after, int limit) {
+		if (accounts.isEmpty()) return List.of();
+		return db.sql("SELECT inbox_sequence, id, account_id, receive_id, sender, content, received_at, status FROM sms_inbox WHERE account_id IN (:accounts) AND inbox_sequence > :after AND (:sender IS NULL OR sender = :sender) AND content IS NOT NULL ORDER BY inbox_sequence LIMIT :limit")
+				.param("accounts", accounts).param("sender", sender, java.sql.Types.VARCHAR).param("after", after).param("limit", limit)
+				.query((rs, row) -> new com.svi.channelconnect.sms.dto.response.SmsInboxResponse.Message(rs.getLong(1),
+						rs.getString(2), rs.getString(3), rs.getLong(4), rs.getString(5), rs.getString(6), rs.getLong(7), rs.getString(8))).list();
+	}
 	public List<Map<String, Object>> conversationHistory(String account, String participant, String currentInboundId) {
 		// Retain every available turn on this SIM/participant route. Unsent or failed messages were not told to the customer.
 		return db.sql("SELECT direction, content, delivery_status FROM (SELECT 'INBOUND' AS direction, content, status AS delivery_status, received_at AS occurred_at, 0 AS turn_order, inbox_sequence AS sequence FROM sms_inbox WHERE account_id = ? AND sender = ? AND content IS NOT NULL AND (status = 'PROCESSED' OR id = ?) UNION ALL SELECT 'OUTBOUND', content, status, COALESCE(transmitted_at, created_at), 1, session_id FROM sms_outbox WHERE account_id = ? AND recipient = ? AND content IS NOT NULL AND status IN ('GATEWAY_SENT','TRANSMITTING','UNKNOWN')) ORDER BY occurred_at, turn_order, sequence")
@@ -200,9 +214,9 @@ public class SmsMessageRepository {
 		db.sql("UPDATE sms_inbox SET status = 'DEAD_LETTER' WHERE status = 'RECEIVED' AND received_at < ?").param(now - properties.queueExpiry().toMillis()).update();
 		db.sql("UPDATE dealer_messages SET content = '' WHERE channel = 'SMS' AND direction = 'INBOUND' AND external_id IN (SELECT 'sms-' || id FROM sms_inbox WHERE status IN ('PROCESSED','DEAD_LETTER') AND received_at < ?)").param(now - properties.contentRetention().toMillis()).update();
 		db.sql("UPDATE dealer_messages SET content = '' WHERE channel = 'SMS' AND direction = 'OUTBOUND' AND external_id IN (SELECT id FROM sms_outbox WHERE completed_at < ?)").param(now - properties.contentRetention().toMillis()).update();
-		db.sql("UPDATE sms_inbox SET content = NULL WHERE status IN ('PROCESSED','DEAD_LETTER') AND received_at < ?").param(now - properties.contentRetention().toMillis()).update();
+		db.sql("UPDATE sms_inbox SET content = NULL WHERE status IN ('PROCESSED','DEAD_LETTER','STORED') AND received_at < ?").param(now - properties.contentRetention().toMillis()).update();
 		db.sql("UPDATE sms_outbox SET content = NULL WHERE completed_at < ?").param(now - properties.contentRetention().toMillis()).update();
-		db.sql("DELETE FROM sms_inbox WHERE status IN ('PROCESSED','DEAD_LETTER') AND received_at < ?").param(now - properties.idRetention().toMillis()).update();
+		db.sql("DELETE FROM sms_inbox WHERE status IN ('PROCESSED','DEAD_LETTER','STORED') AND received_at < ?").param(now - properties.idRetention().toMillis()).update();
 		// Unknown transmission tombstones retain their keys; expiration must never authorize an uncertain resend.
 		db.sql("DELETE FROM sms_outbox WHERE status <> 'UNKNOWN' AND completed_at < ?").param(now - properties.idRetention().toMillis()).update();
 		db.sql("DELETE FROM sms_conversations WHERE last_activity_at < ?").param(now - properties.contentRetention().toMillis()).update();

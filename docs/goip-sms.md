@@ -4,6 +4,21 @@ This is a simulator-tested local integration. The physical VoiceLink GoIPx8, fir
 
 ## Architecture and durability
 
+### Choosing application configuration
+
+`application.properties` contains shared settings. `application-local.properties` loads the repository-root `.env` for IntelliJ and Maven. Select `local` plus **one** SMS provider profile:
+
+| Profile file | Purpose | Required private settings |
+| --- | --- | --- |
+| `application-sms-http.properties` | Send through the gateway's web form, SIM 1 | `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, `SMS_API_TOKEN` |
+| `application-sms-http-two-lines.properties` | Same web form, SIMs 1 and 2 | Same settings as `sms-http`; replaces that profile |
+| `application-sms-http-api.properties` | Hosted PHP send API and continuous inbox polling | `SMS_GOIP_API_SEND_URL`, `SMS_GOIP_API_RECEIVE_URL`, `SMS_GOIP_API_RECEIVE_KEY`, `SMS_GOIP_GATEWAY_ID`, `SMS_API_TOKEN` |
+| `application-sms-mock.properties` | Loopback UDP simulator; no physical gateway | `SMS_MOCK_AUTH_ID`, `SMS_MOCK_PASSWORD`, `SMS_API_TOKEN` |
+
+For direct gateway testing, set `SMS_LIVE_AUTHORIZED=true` in `.env` and use `--spring.profiles.active=local,sms-http`. The two-line and hosted API modes also require live authorization. An IDE environment-file loader or an existing operating-system environment variable can override the profile's authorization default. If the error still says `HTTP requires live-authorized=true`, remove a stale `SMS_LIVE_AUTHORIZED=false` from the IntelliJ run configuration or its inherited environment and restart. There is no need to activate `demo` or use a launcher script.
+
+These are alternative configurations, not five application instances. Keep unused SMS profiles inactive; combining provider profiles can mix incompatible settings.
+
 SMS lives under `com.svi.channelconnect.sms`. `SmsService` validates submissions and commits an outbox record. `SmsProvider` isolates the provider; `GoipSmsProvider` owns the UDP implementation. `SmsMessagingChannel` registers the `SMS` channel with the existing `MessagingAppHandler`. The old fictional SMS demo adapter is used only when SMS integration is disabled; Telegram simulation is unchanged.
 
 ```mermaid
@@ -45,7 +60,7 @@ Cellular length policy is separate from UDP size. The validator counts GSM-7 ext
 
 ## Configuration
 
-Spring does not load `.env` automatically. Use environment variables, an external Spring configuration file, or `SPRING_APPLICATION_JSON`. Never place real credentials or numbers in committed settings.
+The `local` profile loads repository-root `.env` automatically. Alternatively, use environment variables, an external Spring configuration file, or `SPRING_APPLICATION_JSON`. Never place real credentials or numbers in committed settings.
 
 | Environment variable | Default / purpose |
 | --- | --- |
@@ -80,29 +95,42 @@ The operator's supplied collection uses two hosted PHP endpoints. `HTTP_API` mod
 - Send: `POST <send-url>?line=<SIM>&message=<encoded text>&number=<encoded local mobile>`, with an empty body.
 - Receive: `GET <receive-url>?action=message&key=<encoded private key>`.
 
-Set `SMS_GOIP_API_SEND_URL` and `SMS_GOIP_API_RECEIVE_URL` to the collection's endpoint paths **without their query strings**, plus `SMS_GOIP_API_RECEIVE_KEY`, `SMS_GOIP_GATEWAY_ID` (matching incoming `goip_id`), and `SMS_API_TOKEN`, privately in the launching terminal or external configuration. Run:
+Set `SMS_GOIP_API_SEND_URL` and `SMS_GOIP_API_RECEIVE_URL` to the collection's endpoint paths **without their query strings**, plus `SMS_GOIP_API_RECEIVE_KEY`, `SMS_GOIP_GATEWAY_ID` (matching incoming `goip_id`), and `SMS_API_TOKEN`, privately in the repository-root `.env` file or external configuration. The `local` profile loads `.env` directly; no launcher script is required. Run:
 
 ```powershell
-.\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-http-api'
+.\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,sms-http-api'
 ```
 
 The profile maps SIMs 1 and 2 to `goip-line-1` and `goip-line-2`. Add other accounts externally for additional lines. This mode uses HTTPS endpoint URLs and does not require direct gateway access, UDP reception, or a web-login password. Normalized outbound `+639...` numbers become `09...` for the collection's send contract; spaces, ampersands, newlines, and plus signs are URL-encoded. The operator confirmed this POST query request delivers SMS. Its observed response is an HTML management page without a correlated submission acknowledgement, so sends are recorded as `UNKNOWN / HTTP_API_SUBMISSION_UNCONFIRMED` after a successful HTTP response and are never automatically resent. Poll the customer's reply to continue; gateway HTTP success still does not confirm handset delivery.
 
-The hosted receive worker runs continuously using `sms.poll-interval` (`SMS_POLL_INTERVAL`, default `3s`) with one bounded remote request at a time. It accepts the supplied `{success,count,messages}` envelope, matching `goip_id` and `channel` to a configured account. It uses `recvid` for durable account-scoped deduplication and preserves `received_at`; it ignores `raw_packet`, gateway credentials, and other diagnostic fields. Only verified linked identities with consent and outbound permission enter this campaign conversation path. Bank/OTP alphanumeric senders, unconfigured routes, and unrelated customer numbers are skipped.
+The hosted receive worker runs continuously using `sms.poll-interval` (`SMS_POLL_INTERVAL`, default `3s`) with one bounded remote request at a time. It accepts the supplied `{success,count,messages}` envelope, matching `goip_id` and `channel` to a configured account. It uses `recvid` for durable account-scoped deduplication and preserves `received_at`; it ignores `raw_packet`, gateway credentials, and other diagnostic fields. All valid messages on configured gateway/SIM routes are retained for inbox browsing, including history, alphanumeric senders, and unrelated customer numbers. Historic or ineligible messages have status `STORED` and never enter automatic reply processing. Only fresh phone-number replies from verified linked identities with consent and outbound permission enter the campaign conversation path. Unconfigured routes are skipped.
 
-On first activation, a database baseline excludes previously received messages so startup does not answer old inbox history. The default baseline uses second precision to match the supplied timestamps. The same baseline survives restarts, allowing messages since that activation to be imported when the API still exposes them. An optional external `sms.http-api.receive-start-at=<ISO instant>` sets the first baseline for an explicit backfill; changing it does not replace an existing baseline. The collection exposes a snapshot and no pagination/cursor contract, so messages absent from the snapshot cannot be recovered by this client. Keep polling frequency appropriate for its history window. HTTP failures, invalid envelopes, and queue exhaustion leave accepted receipts deduplicated for subsequent polls. Snapshots are limited to 1,000 messages and the response body is bounded by `SMS_GOIP_API_MAX_RESPONSE_BYTES` (default 1 MiB); larger snapshots are rejected. Private URLs, receive keys, raw packets, and customer content are excluded from operational logs.
+On first activation, a database baseline keeps previously received messages out of automatic reply processing; they are still imported as `STORED` for inbox browsing. The default baseline uses second precision to match the supplied timestamps. The same baseline survives restarts, allowing messages since that activation to be imported when the API still exposes them. An optional external `sms.http-api.receive-start-at=<ISO instant>` sets the first baseline for reply processing; changing it does not replace an existing baseline. The collection exposes a snapshot and no pagination/cursor contract, so messages absent from the snapshot cannot be recovered by this client. Keep polling frequency appropriate for its history window. HTTP failures, invalid envelopes, and queue exhaustion leave accepted receipts deduplicated for subsequent polls. Snapshots are limited to 1,000 messages and the response body is bounded by `SMS_GOIP_API_MAX_RESPONSE_BYTES` (default 1 MiB); larger snapshots are rejected. Private URLs, receive keys, raw packets, and customer content are excluded from operational logs.
 
 `/api/v1/sms/receive` polls the retained **local** inbox populated by this worker; its calls do not issue extra gateway requests. Both `HTTP` web-form mode and UDP modes remain available below.
+
+## Combine direct HTTP sending with the hosted inbox
+
+For a working `local,sms-http` sender, keep that profile and set these private `.env` values:
+
+```properties
+SMS_GOIP_API_RECEIVE_ENABLED=true
+SMS_GOIP_API_RECEIVE_URL=<hosted API endpoint without query parameters>
+SMS_GOIP_API_RECEIVE_KEY=<private receive key>
+SMS_GOIP_GATEWAY_ID=<goip_id returned by the hosted API>
+```
+
+The receive client sends `GET <endpoint>?action=message&key=<encoded key>`, independently of the direct web-form sender. A hosted send URL and UDP listener are not required. Restart after changing `.env`. Within the polling interval (default three seconds), imported messages become available through `/api/v1/sms/receive` and `/api/v1/sms/receive-all`; set Postman's `inboxCursor=0` to browse from the start. SIM 1 uses `sms-http`; use `sms-http-two-lines` if both configured SIMs must appear. The hosted snapshot may expose only a limited history window; the application cannot import messages absent from that response. Stored content remains subject to configured retention.
 
 ## Use the direct GoIP8 HTTP sender
 
 The separate `HTTP` mode uses the same Basic Auth web form request as [generic-sms-sender](https://github.com/glenannang/generic-sms-sender): `POST /default/en_US/sms_info.html`. It uses `sms.channels[0].source-address` for `goip.ipaddress`, `auth-id` for `goip.user`, `password` for `goip.pass`, `sim-channel` for `goip.line`, and `sms.session-timeout` for `goip.timeout-seconds`. The tested line is 1. Configure the gateway address and credentials privately through environment variables or an external Spring config file; do not commit them.
 
-The `sms-http` profile maps `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, and optional `SMS_GOIP_TIMEOUT` (default `60s`) into that configuration. Set `SMS_API_TOKEN` privately too, then run `./mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,demo,sms-http'`. The existing outbound API and durable outbox then apply. The HTTP provider marks an HTTP 200 as `GATEWAY_SENT`, matching the reference sender's success criterion. This confirms only that the gateway web form responded successfully; verify handset delivery separately. Any non-200 response, timeout, or uncertain transport result becomes `UNKNOWN` and is not retried automatically. HTTP reception is opt-in through the documented UDP protocol; a firmware HTTP inbox URL has not been supplied.
+The `sms-http` profile maps `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, and optional `SMS_GOIP_TIMEOUT` (default `60s`) into that configuration. Set `SMS_API_TOKEN` privately too, then run `.\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=local,sms-http'`. The existing outbound API and durable outbox then apply. The HTTP provider marks an HTTP 200 as `GATEWAY_SENT`, matching the reference sender's success criterion. This confirms only that the gateway web form responded successfully; verify handset delivery separately. Any non-200 response, timeout, or uncertain transport result becomes `UNKNOWN` and is not retried automatically. HTTP reception is opt-in through the documented UDP protocol; a firmware HTTP inbox URL has not been supplied.
 
-Set those environment variables in the **same PowerShell terminal** that starts Maven. The `goipconfig.properties` file from the standalone sender is not loaded by this application, and `.env` is not loaded automatically. A missing channel value now reports its field name, such as `Invalid SMS channel auth-id`, without printing credentials.
+Put those variables in the repository-root `.env`; the `local` profile loads it for both Maven and IntelliJ. No manual `$env:` assignments or demo launcher are needed. For IntelliJ, use Java 25, the repository root as the working directory, and `--spring.profiles.active=local,sms-http` (or `local,sms-http-api`) as program arguments. Supply the required Meta/admin settings from `.env.example` too: omitting `demo` removes its offline placeholder credentials. The `goipconfig.properties` file from the standalone sender is not loaded by this application. A missing channel value now reports its field name, such as `Invalid SMS channel auth-id`, without printing credentials.
 
-For line 2, start with `local,demo,sms-http-two-lines` instead of `sms-http`. This profile configures `goip-line-1` and `goip-line-2` on one gateway using the same HTTP login. The profile makes no claim that line 2 has been verified on the physical device; test its routing with an approved handset.
+For line 2, start with `local,sms-http-two-lines` instead of `sms-http`. This profile configures `goip-line-1` and `goip-line-2` on one gateway using the same HTTP login. The profile makes no claim that line 2 has been verified on the physical device; test its routing with an approved handset.
 
 For two-way HTTP-mode conversations, supply an external Spring configuration with the following properties, replacing placeholders privately:
 
@@ -139,7 +167,7 @@ Supply additional mock channel entries through external configuration/`SPRING_AP
 
 ## Application API and Postman
 
-Import [the local Postman collection](postman/goip-sms-local.postman_collection.json). Set `smsApiToken`, `adminUsername`, and `adminPassword` privately. Its base URL is loopback. Existing WhatsApp routes are unchanged.
+Import [the SMS application Postman collection](postman/goip-sms-local.postman_collection.json). It contains only send, receive, and receive-all. Set `smsApiToken` to `SMS_API_TOKEN`, `testRecipient` to an approved mobile number, and `accountId` to `goip-line-1` (or the configured SIM). Postman variables are separate from the application's `.env`. Leave `idempotencyKey` blank for a new key per send, or set an explicit key for a retry. `receiveCursor` tracks new-message polling; the separate `inboxCursor` starts at `0` and does not advance automatically. Set it manually to `nextCursor` to browse another history page when `hasMore=true`.
 
 Submit `POST /api/v1/sms/send` (or the compatible `/api/v1/sms/messages`), using `Authorization: Bearer <SMS_API_TOKEN>`, `Idempotency-Key: <stable request key>`, and JSON:
 
@@ -156,6 +184,8 @@ The response is `202`, with a `Location` status URL:
 `GET /api/v1/sms/messages/{messageId}` requires the same bearer credential and returns message status, a safe `errorCode` when present, and `handsetDelivery: UNCONFIRMED`. Reusing a key with identical normalized inputs returns the original message and `replay: true`; changed inputs return `409`. Validation returns `400`, unknown accounts or revoked customer authorization return `403`, queue exhaustion returns `503`, and request bodies larger than 16 KiB return `413`. The SMS API accepts any valid Philippine mobile number; there is no SMS recipient allowlist. Keep the bearer token private because it can authorize sends to any such number.
 
 `content` is the final customer-facing text supplied by a caller, including an already produced LLM reply. `/send` does not call the LLM. Do not send the interpreter's internal intent JSON as SMS content. The automatic conversation worker already generates and enqueues one reply for each inbound receipt; manually submitting the same reply with a different key creates an additional outbound SMS.
+
+Browse inbox history with `GET /api/v1/sms/receive-all?after=0&limit=100`, using the same bearer token. Omit `accountId` to include all configured SIM accounts; optional `accountId` and `sender` filter the result. This returns immediately with `messages`, `nextCursor`, and `hasMore`. Each message includes its `accountId`. Repeat using `after=nextCursor` until `hasMore=false` to list the whole retained inbox. Limits are 1–100; cursor order is stable import order, independent of remote timestamps. Reading history neither consumes receipts nor changes processing state. Expired content and unconfigured accounts are excluded. This lists the application's stored inbox, not messages that were never imported from the remote gateway.
 
 Poll `GET /api/v1/sms/receive?accountId=goip-line-1&after=0&waitSeconds=25` with the same bearer token. Optional `sender` filters one normalized customer; `limit` is 1–100 (default 100). `waitSeconds` is 0–30 (default 25). Empty polls wait asynchronously, with at most 100 concurrent waiting requests, and return `200` with an unchanged cursor at timeout. A response looks like:
 
