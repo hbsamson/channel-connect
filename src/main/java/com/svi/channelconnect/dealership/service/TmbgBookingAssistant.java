@@ -46,10 +46,14 @@ public class TmbgBookingAssistant {
 	private static final Set<String> DECISIONS = Set.of("accepted", "declined", "skipped");
 	private static final Pattern FALSE_CONFIRMATION = Pattern.compile("(?i)\\b(confirmed|booked|TMB-\\d+)\\b");
 	private static final Pattern INTERNAL_LABEL = Pattern.compile("(?i)\\bdemo\\b");
+	private static final Map<String, Pattern> CONVERSATIONAL_OPENERS = conversationalOpeners();
 	private static final String CAPABILITY_RULES = """
 
 		CHAT CAPABILITIES (take precedence over suggested actions in templates or reference material)
 		A saved booking ends booking operations, but general dealership questions remain available.
+		Short social replies are allowed at every stage. Greet naturally, thank briefly and acknowledge the customer's words before returning to the current question.
+		The service handles recognized leading greetings, thanks and wellbeing questions; do not repeat them when the latest message contains only the remaining request.
+		Greetings, gratitude and small talk are never service acceptance, refusal or date selection. Do not restart offers or push a sales question after a simple thank-you.
 		Already-renewed customers may continue with maintenance or insurance. Never default to registration or add unaccepted services.
 		No callbacks, pickups, quote delivery or human transfers are implemented. Do not promise those actions.
 		For a person, callback or unavailable action, politely ask the customer to contact Toyota Manila Bay directly. Do not follow that with another sales question.
@@ -137,7 +141,7 @@ public class TmbgBookingAssistant {
 		ConversationKey key = new ConversationKey(channel, account, participant);
 		Session session = sessions.get(key);
 		if (session == null) {
-			if (!optOut(content)) {
+			if (!optOut(conversationalMessage(content).message())) {
 				String greeting = start(channel, account, participant);
 				session = sessions.get(key);
 				session.history.addFirst(Map.of("direction", "INBOUND", "content", content));
@@ -150,43 +154,88 @@ public class TmbgBookingAssistant {
 		if (session.replies.containsKey(receiptId)) return session.replies.get(receiptId);
 		if (session.suppressed) return null;
 		session.language = content.toLowerCase(Locale.ROOT).matches(
-				"(?s).*\\b(po|opo|hindi|sige|oo|salamat|magkano|ano|anong|gusto|pwede|puwede|paki|ako|ko|kami|namin|ninyo|niyo|yung|iyong|sa|ng|na|lang|bukas|kailan|paano|wala|meron|ayoko|huwag|wag)\\b.*") ? "tl" : "en";
+				"(?s).*\\b(po|opo|hindi|sige|oo|salamat|magkano|ano|anong|gusto|pwede|puwede|paki|ako|ko|kami|namin|ninyo|niyo|yung|iyong|sa|ng|na|lang|bukas|kailan|paano|wala|meron|ayoko|huwag|wag|kumusta|kamusta|magandang)\\b.*") ? "tl" : "en";
+		ConversationalMessage conversational = conversationalMessage(content);
+		String message = conversational.message();
 		String previousRegistration = session.registration;
 		List<String> previousServices = session.services;
-		if (!session.stage.equals("CONFIRMED")) registrationStatus(session, content);
+		if (!session.stage.equals("CONFIRMED") && !message.isBlank()) registrationStatus(session, message);
 		Map<String, Object> fields = fields(session, phone(channel, participant));
 		String reply;
 		try {
-			if (optOut(content)) {
+			if (optOut(message)) {
 				session.suppressed = true;
 				reply = render("OPTOUT_CONFIRM", session, fields);
-			} else if (content.toLowerCase(Locale.ROOT).matches("(?s).*\\b(wrong number|not the owner|hindi ako si|maling number)\\b.*")) {
+			} else if (message.toLowerCase(Locale.ROOT).matches("(?s).*\\b(wrong number|not the owner|hindi ako si|maling number)\\b.*")) {
 				session.suppressed = true;
 				reply = render("ID_WRONG_PERSON", session, fields);
-			} else if (session.stage.equals("SLOTS_OFFERED") && content.toLowerCase(Locale.ROOT).trim().matches(
+			} else if (!conversational.templateIds().isEmpty() && message.isBlank()) {
+				reply = conversationalFollowup(session, conversational, fields);
+			} else if (session.stage.equals("SLOTS_OFFERED") && message.toLowerCase(Locale.ROOT).trim().matches(
 					"(?s)(?:more|next)[.!? ]*|.*\\b(?:(?:more|other|different|next|later|another) (?:dates?|slots?|options?|times?)|ibang (?:petsa|araw|schedule)|iba pa)\\b.*")) {
 				reply = moreDates(session, phone(channel, participant));
-			} else if (session.stage.equals("CONFIRMED") && knowledge.bookingChange(content)) {
+			} else if (session.stage.equals("CONFIRMED") && knowledge.bookingChange(message)) {
 				reply = bookingChangesUnavailable(session);
 			} else {
-				JsonNode answer = ai.provider() == AiProperties.Provider.MOCK ? mockAnswer(session, content, fields)
-						: json.readTree(client.generateResponse(new AiRequest(receiptId, context(session, content, fields), channelText(instructions, channel), true)).text());
+				JsonNode answer = ai.provider() == AiProperties.Provider.MOCK ? mockAnswer(session, message, fields)
+						: json.readTree(client.generateResponse(new AiRequest(receiptId, context(session, message, fields), channelText(instructions, channel), true)).text());
 				if (answer != null && (knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, channel) != null
 						|| answer.path("outcome").asString().equals("unavailable"))) {
 					session.registration = previousRegistration;
 					session.services = previousServices;
 				}
-				reply = apply(session, new Incoming(channel, account, participant, receiptId, content), answer, fields);
+				reply = apply(session, new Incoming(channel, account, participant, receiptId, message), answer, fields);
 			}
 		} catch (RuntimeException exception) {
 			LOGGER.warn("Booking demo reply unavailable; using prepared template");
 			reply = fallback(session, fields);
+		}
+		if (!session.suppressed && !conversational.templateIds().isEmpty()) {
+			List<String> acknowledgements = new ArrayList<>();
+			for (String id : conversational.templateIds()) acknowledgements.add(render(id, session, fields));
+			String acknowledgement = String.join(" ", acknowledgements);
+			if (validSms(acknowledgement + " " + reply)) reply = acknowledgement + (reply.isBlank() ? "" : " " + reply);
 		}
 		if (session.language.equals("en")) reply = fullEnglish(reply);
 		session.replies.put(receiptId, reply);
 		session.history.add(Map.of("direction", "INBOUND", "content", content));
 		session.history.add(Map.of("direction", "OUTBOUND", "content", reply));
 		return reply;
+	}
+
+	private static Map<String, Pattern> conversationalOpeners() {
+		Map<String, Pattern> patterns = new LinkedHashMap<>();
+		String end = "(?=$|[\\s,.!?;:])[,!?.;:\\s]*";
+		patterns.put("GREETING_ACK", Pattern.compile("(?i)^(?:(?:hi|hello|hey)(?: there)?|good (?:morning|afternoon|evening|day)|magandang (?:umaga|hapon|gabi))(?: po)?" + end));
+		patterns.put("THANKS_ACK", Pattern.compile("(?i)^(?:thanks(?: a lot| so much)?|thank you(?: so much)?|(?:maraming )?salamat)(?: po)?(?: (?:for (?:your help|the help|explaining|the information)|sa (?:tulong|info)))?" + end));
+		patterns.put("WELLBEING_ACK", Pattern.compile("(?i)^(?:how are you(?: doing)?(?: today)?|(?:kumusta|kamusta)(?: po)?(?: (?:ka|kayo))?)(?: po)?(?=$|[,.!?;:])[,!?.;:\\s]*"));
+		return patterns;
+	}
+
+	private ConversationalMessage conversationalMessage(String content) {
+		List<String> acknowledgements = new ArrayList<>();
+		String message = content.trim();
+		// Consume a short social opener without losing a following question, decision or date.
+		for (int count = 0; count < 2; count++) {
+			boolean matched = false;
+			for (var entry : CONVERSATIONAL_OPENERS.entrySet()) {
+				var matcher = entry.getValue().matcher(message);
+				if (!matcher.find()) continue;
+				if (!acknowledgements.contains(entry.getKey())) acknowledgements.add(entry.getKey());
+				message = message.substring(matcher.end()).trim();
+				matched = true;
+				break;
+			}
+			if (!matched) break;
+		}
+		return new ConversationalMessage(acknowledgements, message);
+	}
+
+	private String conversationalFollowup(Session session, ConversationalMessage message, Map<String, Object> fields) {
+		if (message.templateIds().stream().allMatch("THANKS_ACK"::equals)
+				|| Set.of("CONFIRMED", "COMPLETED_NO_BOOKING").contains(session.stage)) return "";
+		if (session.focus != null && !session.stage.equals("REG_STATUS_ASKED")) return render("RESUME_SERVICE_OFFER", session, fields);
+		return fallback(session, fields);
 	}
 
 	private String context(Session session, String text, Map<String, Object> fields) {
@@ -397,26 +446,34 @@ public class TmbgBookingAssistant {
 	}
 
 	private String advanceServices(Session session, String phone) {
+		String acknowledgementTemplate = switch (session.serviceStatus.get(session.focus)) {
+			case "accepted" -> "SERVICE_ACCEPTED_ACK";
+			case "declined" -> "SERVICE_DECLINED_ACK";
+			case "skipped" -> "SERVICE_SKIPPED_ACK";
+			default -> throw new IllegalStateException("Current service has no decision");
+		};
+		// Render before advancing so the acknowledgement names the service just answered.
+		String acknowledgement = render(acknowledgementTemplate, session, fields(session, phone));
+		String reply;
 		if (!allServicesAnswered(session)) {
 			String template = offerNext(session);
-			return render(template, session, fields(session, phone));
+			reply = render(template, session, fields(session, phone));
+		} else {
+			session.focus = null;
+			if (session.services.isEmpty()) {
+				session.stage = "COMPLETED_NO_BOOKING";
+				reply = render("DECLINE_CLOSE", session, fields(session, phone));
+			} else {
+				reply = offerDates(session, phone);
+			}
 		}
-		session.focus = null;
-		if (session.services.isEmpty()) {
-			session.stage = "COMPLETED_NO_BOOKING";
-			return render("DECLINE_CLOSE", session, fields(session, phone));
-		}
-		return offerDates(session, phone);
+		return acknowledgement + " " + reply;
 	}
 
 	private String offerDates(Session session, String phone) {
 		if (!allServicesAnswered(session) || session.services.isEmpty()) return fallback(session, fields(session, phone));
 		Map<String, Object> fields = fields(session, phone);
 		if (session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
-		if (session.registration.equals("unknown") && fields.get("window_status").equals("closed")) {
-			session.stage = "REG_STATUS_ASKED";
-			return render("REG_VALID_CHECK", session, fields);
-		}
 		session.slots = availableDates();
 		if (session.slots.isEmpty()) return noSlots(session);
 		session.stage = "SLOTS_OFFERED";
@@ -505,7 +562,7 @@ public class TmbgBookingAssistant {
 		fields.put("dial_number", phone); fields.put("branch_name", customer.path("enrichment").path("branch_name").asString());
 		for (String name : List.of("pms_milestone_km", "pms_price", "reg_service_fee", "collection_note")) {
 			JsonNode value = customer.path("enrichment").path(name);
-			fields.put(name, value.isNull() || value.isMissingNode() ? "to be confirmed by a TMBG advisor"
+			fields.put(name, value.isNull() || value.isMissingNode() ? "to be confirmed by our advisor"
 					: (name.equals("pms_price") || name.equals("reg_service_fee")) && !value.asString().startsWith("PHP ") ? "PHP " + value.asString() : value.asString());
 		}
 		JsonNode priceRange = insurancePrices.path("price_range");
@@ -538,7 +595,7 @@ public class TmbgBookingAssistant {
 	private String chosenSlot(Session session, String text) {
 		// Match a complete date selection, rather than a date in a question, refusal or tentative reply.
 		String value = text.toLowerCase(Locale.ROOT).replace('\u2019', '\'').trim().replaceAll("\\s+", " ")
-				.replaceAll(",\\s*", " ").replace("a.m.", "am").replace("p.m.", "pm")
+				.replaceAll(",\\s*", " ")
 				.replaceAll("\\b(jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\\.", "$1")
 				.replaceAll("\\b(\\d{1,2})(?:st|nd|rd|th)\\b", "$1");
 		if (value.contains("?") && !value.matches("^(?:please )?(?:(?:can|could|would) you (?:please )?)?(?:book|reserve|schedule)\\b.*")) return null;
@@ -549,9 +606,8 @@ public class TmbgBookingAssistant {
 				.replaceFirst("^(?:i(?:'m| am) available|i can (?:come|visit)|my (?:choice|preferred date) is)(?: on)?\\s+", "")
 				.replaceFirst("^(?:(?:can|could|would) you (?:please )?)?(?:book|reserve|schedule|choose|select|paki-?book|pa-?book)(?: me| my (?:visit|appointment))?(?: po)?\\s+", "")
 				.replaceFirst("^(?:(?:for|on|sa|yung|this|coming|the) )+", "")
-				.replaceFirst("(?: (?:po|please|na lang|instead|works for me|would work for me|works|would work|is fine|is good|na|lang))+$", "")
-				.replaceAll("\\s+(am|pm)\\b", "$1");
-		if (value.matches("(?:the )?(?:first|earliest)(?: one)?|(?:yung )?pinakamaaga")) {
+				.replaceFirst("(?: (?:po|please|na lang|instead|works for me|would work for me|works|would work|is fine|is good|na|lang))+$", "");
+		if (value.matches("(?:the )?(?:first|earliest)(?: one| day| date)?|(?:yung )?pinakamaaga")) {
 			return session.slots.keySet().stream().findFirst().orElse(null);
 		}
 		List<String> matches = new ArrayList<>();
@@ -608,8 +664,8 @@ public class TmbgBookingAssistant {
 			text = templates.get(id).path("fallback_" + language).asString(text);
 		}
 		for (var field : fields.entrySet()) text = text.replace("{{" + field.getKey() + "}}", field.getValue().toString());
-		if (text.contains("{{")) return language.equals("tl") ? "Kukumpirmahin po ng TMBG advisor ang detalye."
-				: "A TMBG advisor can confirm that detail po.";
+		if (text.contains("{{")) return language.equals("tl") ? "Kukumpirmahin po ng advisor ang detalye."
+				: "Our advisor can confirm that detail.";
 		return language.equals("en") ? fullEnglish(text) : text;
 	}
 
@@ -667,5 +723,6 @@ public class TmbgBookingAssistant {
 		private Session(String channel) { this.channel = channel; serviceStatus.put("renewal", "offered"); }
 	}
 	private record ConversationKey(String channel, String accountId, String participant) { }
+	private record ConversationalMessage(List<String> templateIds, String message) { }
 	private record Incoming(String channel, String accountId, String sender, String id, String content) { }
 }

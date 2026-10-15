@@ -29,10 +29,10 @@
 			"smsTaglish": "Ipa-check sa advisor ang Express Maintenance eligibility at confirmed turnaround."
 		},
 		"PMS_DETAILS": {
-			"english": "The approved minor PMS scope includes Toyota Genuine Motor Oil, an oil filter, a sump washer, and a safety check. Additional major PMS work depends on the vehicle model and maintenance milestone; an advisor confirms the required items and quote.",
-			"taglish": "Kasama sa approved minor PMS ang Toyota Genuine Motor Oil, oil filter, sump washer, at safety check. Depende sa model at maintenance milestone ang dagdag sa major PMS; advisor ang magkukumpirma ng items at quote.",
-			"smsEnglish": "Minor PMS: Toyota Genuine oil, filter, sump washer & safety check. Major scope varies.",
-			"smsTaglish": "Minor PMS: Toyota Genuine oil, filter, sump washer at safety check. Iba ang major scope."
+			"english": "Basic regular maintenance includes Toyota Genuine Motor Oil, an oil filter, a sump washer, and a safety check. Additional work depends on the vehicle model and maintenance milestone; an advisor confirms the required items and estimate.",
+			"taglish": "Kasama sa basic regular maintenance ang Toyota Genuine Motor Oil, oil filter, sump washer, at safety check. Depende sa model at maintenance milestone ang dagdag na trabaho; advisor ang magkukumpirma ng items at estimate.",
+			"smsEnglish": "Regular maintenance: Toyota oil, filter, sump washer, safety check; extra work varies.",
+			"smsTaglish": "Regular maintenance: Toyota oil, filter, sump washer at safety check; iba-iba ang dagdag."
 		},
 		"INSURANCE_DETAILS": {
 			"english": "Toyota Insure options can cover repair through the dealer, genuine parts, and direct claims support according to the issued policy. Coverage, deductible, Acts of Nature, eligibility, and premium must be checked against your policy and confirmed quote.",
@@ -47,22 +47,22 @@
 			"smsTaglish": "Ikumpara ang policy cover, dealer repair, parts, claims at deductible; ipa-confirm ang quote."
 		},
 		"LTO_DETAILS": {
-			"english": "Registration concierge assistance supports inspection, CTPL checks where required, and document liaison. Required documents, eligibility, fees, and processing schedule need dealership confirmation.",
-			"taglish": "Tumutulong ang registration concierge sa inspection, CTPL checks kung kailangan, at document liaison. Kailangan munang kumpirmahin sa dealership ang documents, eligibility, fees, at processing schedule.",
-			"smsEnglish": "Concierge helps inspection, required CTPL and documents; advisor confirms fees and needs.",
-			"smsTaglish": "Concierge: inspection, required CTPL at documents; advisor ang magko-confirm ng fees."
+			"english": "Registration concierge assistance supports inspection, required basic insurance checks where required, and document liaison. Required documents, eligibility, fees, and processing schedule need dealership confirmation.",
+			"taglish": "Tumutulong ang registration concierge sa inspection, required basic insurance checks kung kailangan, at document liaison. Kailangan munang kumpirmahin sa dealership ang documents, eligibility, fees, at processing schedule.",
+			"smsEnglish": "Help with inspection, required basic insurance and documents; advisor confirms fees.",
+			"smsTaglish": "Tulong sa inspection, required basic insurance at papeles; ipa-confirm ang fees."
 		},
 		"LTO_DIY": {
-			"english": "You can handle registration through LTMS yourself po. Our concierge option helps coordinate inspection, required CTPL checks, and document liaison if you prefer assistance. The applicable requirements and fees still need confirmation.",
-			"taglish": "Pwede po kayong mag-asikaso sa LTMS mismo. Kung gusto ninyo ng tulong, maaaring i-coordinate ng concierge ang inspection, required CTPL checks, at document liaison. Kailangan pa ring kumpirmahin ang requirements at fees.",
-			"smsEnglish": "DIY LTMS is an option; concierge helps inspection, required CTPL and document liaison.",
-			"smsTaglish": "Pwede ang DIY LTMS; concierge helps inspection, required CTPL at documents."
+			"english": "You can handle registration yourself through the online registration portal. If you prefer assistance, we can help coordinate inspection, required basic insurance checks and documents. The requirements and fees still need confirmation.",
+			"taglish": "Pwede po kayong mag-asikaso mismo sa online registration portal. Kung gusto ninyo ng tulong, maaari naming i-coordinate ang inspection, required basic insurance checks at documents. Kailangan pa ring kumpirmahin ang requirements at fees.",
+			"smsEnglish": "You can handle registration online yourself; ask an advisor about help and fees.",
+			"smsTaglish": "Pwede ninyong asikasuhin online ang registration; itanong sa advisor ang tulong at fees."
 		},
 		"BUNDLE": {
-			"english": "A combined visit can coordinate PMS, insurance assistance, and LTO registration assistance, subject to service availability, scheduling, and document checks. The advisor confirms which items apply to your vehicle and the final quote.",
-			"taglish": "Maaaring i-coordinate sa isang visit ang PMS, insurance assistance, at LTO registration assistance, depende sa service availability, schedule, at document checks. Advisor ang magkukumpirma ng applicable items at final quote.",
-			"smsEnglish": "One visit can coordinate PMS, insurance & LTO; schedules, documents and quote need checks.",
-			"smsTaglish": "PMS, insurance at LTO sa isang visit: ipa-check ang schedule, documents at quote."
+			"english": "A combined visit can coordinate regular maintenance, insurance assistance, and registration assistance, subject to service availability, scheduling, and document checks. The advisor confirms which items apply to your vehicle and the final quote.",
+			"taglish": "Maaaring i-coordinate sa isang visit ang regular maintenance, insurance assistance, at registration assistance, depende sa service availability, schedule, at document checks. Advisor ang magkukumpirma ng applicable items at final quote.",
+			"smsEnglish": "One visit for regular maintenance, insurance and registration, subject to advisor checks.",
+			"smsTaglish": "Regular maintenance, insurance at registration sa isang visit; kailangan ng advisor checks."
 		}
 	},
 	"services": {
@@ -75,9 +75,9 @@
 			]
 		},
 		"pms": {
-			"name": "Periodic Maintenance Service",
+			"name": "regular maintenance",
 			"price": "Estimated starting price: PHP 3,000; final vehicle-specific quote needs confirmation.",
-			"smsInclusions": "Minor PMS: Genuine oil, filter, sump washer, safety check; major work varies.",
+			"smsInclusions": "Basic regular maintenance: Genuine oil, filter, sump washer, safety check; extra work varies.",
 			"inclusions": [
 				"Toyota Genuine Motor Oil",
 				"Oil filter",
@@ -97,21 +97,21 @@
 		"2-in-1": {
 			"name": "2-in-1 package",
 			"price": "Price needs dealership confirmation.",
-			"smsInclusions": "2-in-1: PMS and comprehensive insurance renewal assistance.",
+			"smsInclusions": "2-in-1: regular maintenance and comprehensive insurance renewal assistance.",
 			"inclusions": [
-				"PMS",
+				"regular maintenance",
 				"Comprehensive insurance renewal assistance"
 			]
 		},
 		"3-in-1": {
 			"name": "3-in-1 package",
 			"price": "Price needs dealership confirmation.",
-			"smsInclusions": "3-in-1: PMS, insurance and LTO renewal assistance; CTPL if required.",
+			"smsInclusions": "Regular maintenance, insurance, registration; basic insurance when required.",
 			"inclusions": [
 				"Registration renewal assistance",
 				"Comprehensive insurance renewal assistance",
-				"CTPL only when the customer's record says it is required",
-				"PMS"
+				"required basic insurance only when the customer's record says it is required",
+				"regular maintenance"
 			]
 		},
 		"custom": {

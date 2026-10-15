@@ -1,85 +1,85 @@
 {
+  "_note": "Every price is an estimate and is always said as an estimate (around, usually, estimated); never as an exact quote. The three services, in the order they are offered. The service layer uses this to fill price fields and to decide which service to offer next.",
+  "version": "v2",
   "services": [
     {
-      "what_it_is": "Renewal of the car's registration, with the required basic insurance (CTPL) renewed together with it.", 
-      "expired_registration": "If the renewal period has passed or the customer says it expired, never book a drive-in. Follow the expired-registration rules.", 
-      "skip_when": [
-        "The customer says it is already renewed.", 
-        "The customer declined it."
-      ], 
+      "id": "renewal",
+      "priority": 1,
+      "name_en": "registration renewal",
+      "name_tl": "registration renewal",
+      "what_it_is": "Renewal of the car's registration, with the required basic insurance renewed together with it.",
       "price": {
-        "text": "PHP 1,250", 
-        "confirmed": false, 
-        "extra": "LTO charges are extra, at actual cost, and fixed by law. They cannot be discounted.", 
-        "service_fee": 1250
-      }, 
-      "name_tl": "registration renewal", 
-      "priority": 1, 
-      "offer_when": "Always offer first. Give reg_window_start through reg_window_end as a period. Record the answer, then ask about maintenance even after a refusal.", 
-      "name_en": "registration renewal", 
-      "id": "renewal"
-    }, 
+        "service_fee": 1250,
+        "text": "PHP 1,250",
+        "extra": "Government registration charges are extra, at actual cost, and fixed by law. They cannot be discounted.",
+        "confirmed": false
+      },
+      "offer_when": "Always offer first. Give reg_window_start through reg_window_end as a period. Record the answer, then ask about maintenance even after a refusal.",
+      "skip_when": [
+        "The customer says it is already renewed.",
+        "The customer declined it."
+      ],
+      "expired_registration": "If the renewal period has passed or the customer says it expired, never book a drive-in. Follow the expired-registration rules."
+    },
     {
-      "what_it_is": "Regular maintenance (PMS) of the car at the branch.", 
-      "skip_when": [
-        "The customer says the car was just serviced.", 
-        "The customer declined it."
-      ], 
+      "id": "pms",
+      "priority": 2,
+      "name_en": "regular maintenance",
+      "name_tl": "regular maintenance",
+      "what_it_is": "Regular maintenance of the car at the branch.",
       "price": {
+        "basis": "5,000 km service. For another km reading, the advisor confirms the amount.",
+        "confirmed": false,
         "bands": [
           {
-            "note": "Basic parts and labor with standard oil.", 
-            "text": "PHP 1,500 to 2,500", 
-            "applies_to": "Standard passenger cars and small SUVs, for example Vios, Wigo, Raize.", 
-            "high": 2500, 
-            "plus": false, 
-            "low": 1500, 
-            "id": "standard"
-          }, 
+            "id": "standard",
+            "applies_to": "Standard passenger cars and small SUVs, for example Vios, Wigo, Raize.",
+            "low": 1500,
+            "high": 2500,
+            "plus": false,
+            "text": "PHP 1,500 to 2,500",
+            "note": "Basic parts and labor with standard oil."
+          },
           {
-            "note": "Final amount depends on the model, engine and oil grade.", 
-            "text": "PHP 3,000 to 5,500+", 
-            "applies_to": "Larger diesel vehicles and hybrids, for example Fortuner, Innova, Zenix.", 
-            "high": 5500, 
-            "plus": true, 
-            "low": 3000, 
-            "id": "large_or_hybrid"
+            "id": "large_or_hybrid",
+            "applies_to": "Larger diesel vehicles and hybrids, for example Fortuner, Innova, Zenix.",
+            "low": 3000,
+            "high": 5500,
+            "plus": true,
+            "text": "PHP 3,000 to 5,500+",
+            "note": "Final amount depends on the model, engine and oil grade."
           }
-        ], 
-        "confirmed": false, 
-        "if_model_unknown": "Say the advisor will confirm the amount for the car.", 
-        "basis": "5,000 km service. For another km reading, the advisor confirms the amount."
-      }, 
-      "name_tl": "regular maintenance", 
-      "priority": 2, 
+        ],
+        "if_model_unknown": "Say the advisor will confirm the amount for the car."
+      },
+      "offer_when": "Always ask second, after registration renewal has been answered, whether accepted, declined or skipped. Then ask about insurance.",
+      "skip_when": [
+        "The customer says the car was just serviced.",
+        "The customer declined it."
+      ],
       "wording_by_service_state": {
-        "never_serviced_here": "We can take care of the regular maintenance.", 
-        "stopped": "We would love to see your car again. Never say it has been a long time or blame the customer.", 
-        "due_soon": "coming up for its regular maintenance", 
-        "overdue": "due for its regular maintenance"
-      }, 
-      "offer_when": "Always ask second, after registration renewal has been answered, whether accepted, declined or skipped. Then ask about insurance.", 
-      "name_en": "regular maintenance", 
-      "id": "pms"
-    }, 
+        "due_soon": "coming up for its regular maintenance",
+        "overdue": "due for its regular maintenance",
+        "stopped": "We would love to see your car again. Never say it has been a long time or blame the customer.",
+        "never_serviced_here": "We can take care of the regular maintenance."
+      }
+    },
     {
-      "what_it_is": "Full-coverage car insurance (comprehensive). The required basic insurance (CTPL) is separate: it is renewed together with the registration and is part of the registration renewal.", 
+      "id": "insurance",
+      "priority": 3,
+      "name_en": "car insurance",
+      "name_tl": "car insurance",
+      "what_it_is": "Full-coverage car insurance (comprehensive). The required basic insurance is separate: it is renewed together with the registration and is part of the registration renewal.",
+      "price": {
+        "source_file": "insurance_prices.json",
+        "if_range_missing": "Say the advisor will confirm the price. Never quote the previous premium as the new price.",
+        "confirmed": false
+      },
+      "offer_when": "Always ask third, after registration and maintenance have been answered, even if both were refused or the record says insurance is active. Do not assume renewal is due.",
       "skip_when": [
         "After being asked, the customer says insurance is still active, already renewed or not needed."
-      ], 
-      "price": {
-        "confirmed": false, 
-        "source_file": "insurance_prices.json", 
-        "if_range_missing": "Say the advisor will confirm the price. Never quote the previous premium as the new price."
-      }, 
-      "name_tl": "car insurance", 
-      "priority": 3, 
-      "offer_when": "Always ask third, after registration and maintenance have been answered, even if both were refused or the record says insurance is active. Do not assume renewal is due.", 
-      "always_say": "The insurance company still has to approve it.", 
-      "name_en": "car insurance", 
-      "id": "insurance"
+      ],
+      "always_say": "The insurance company still has to approve it."
     }
-  ], 
-  "_note": "Every price is an estimate and is always said as an estimate (around, usually, estimated); never as an exact quote. The three services, in the order they are offered. The service layer uses this to fill price fields and to decide which service to offer next.", 
-  "version": "v2"
+  ]
 }
