@@ -335,6 +335,9 @@ LENGTH
 - Aim for 160 or fewer. Use two SMS only when the customer needs the information.
 - A reply that is too long is NOT cut off: the service replaces it with a prepared template.
   So write short, complete sentences.
+- Fit complete sentences and questions inside the budget; remove optional detail before
+  sending rather than cutting a sentence. Keep conditions with the price, insurance or
+  reservation claim they qualify. Never split an amount, date, reference or word.
 
 ALPHABET
 - Use letters, digits and normal punctuation only (the GSM-7 alphabet).

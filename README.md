@@ -14,6 +14,8 @@ SMS supports bearer-protected `/api/v1/sms/send`, cursor-based `/api/v1/sms/rece
 
 `MessagingAppHandler` selects a `MessagingChannel` adapter by its channel name. Messenger and WhatsApp normalize authenticated inbound events into the dealership conversation service, which resolves verified customer identities, persists cross-channel context, and executes grounded service/appointment workflows. Existing webhook authentication, queues and provider clients stay in each connector. Shared dealership behavior lives under `dealership`; channel-neutral AI interpretation remains under `ai`.
 
+When plain AI text exceeds `AI_MAX_RESPONSE_CHARACTERS`, it ends at the last complete sentence that fits, or at a word boundary with `...` when no sentence fits. A single oversized token falls back to a Unicode character boundary. Incomplete AI responses and oversized structured responses are rejected rather than clipped. SMS keeps its encoding-aware limits and complete prepared fallbacks so booking details and qualifications are not silently removed; gateway-controlled multipart SMS boundaries are not set by this application.
+
 To add a platform, implement `common.service.MessagingChannel` as a Spring bean with a unique channel name, add its authenticated webhook and dispatch adapter, and call the handler from that workflow. Adding an adapter does not expose a public send endpoint. Provider acceptance is separate from delivery confirmation. The shared text operation is for channel workflows; WhatsApp application-initiated messages still use the guarded template endpoint.
 
 ## Configuration and local development
