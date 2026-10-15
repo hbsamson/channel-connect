@@ -1,21 +1,30 @@
 {
-  "_note": "Placeholders in double braces are filled by the service from the customer record, the service catalog and the derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL). No template asks the customer to reply with a code, number or letter. Every price or fee is an estimate: always say around, usually or estimated, never quote it as exact. You may lightly reword a template to sound natural, but never change a number, date, fee, price, time or branch name.",
-  "version": "v6",
+  "_note": "Placeholders in double braces are filled by the service from the customer record, the service catalog and the derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL). No template asks the customer to reply with a code, number or letter. Every price or fee is an estimate: always say around, usually or estimated, never quote it as exact. You may lightly reword a template to sound natural, but never change a number, date, fee, price, time or branch name. FLOW UPDATE: On a no to 3-in-1, send SERVICE_CHOICE_PIVOT (not RENEWAL_OFFER_OPEN). Follow only customer-selected service(s). Do not repeat car model, plate, expiry, or all three sales benefits after opening. Customer-facing name is Preventative Maintenance Service, never PMS. Do not promise 60-minute express, warranty protection, guaranteed claims or zero-cash-out unless separately verified. Never stack redundant acknowledgements. Booking and safety safeguards remain in force.",
+  "version": "v7-natural-choice",
   "templates": [
     {
       "id": "OPEN_GREETING",
       "scenario": "First outbound SMS (greeting)",
-      "when": "Offer maintenance, comprehensive insurance and registration renewal together. A yes accepts all three; a no starts individual offers without declining any service.",
+      "when": "First offer for all three services. Yes accepts all three and proceeds to scheduling; no declines only the bundle and triggers SERVICE_CHOICE_PIVOT. Never interpret bundle refusal as declining individual services.",
       "used_by": "campaign_sender",
       "en": "Hi {{first_name}}! This is Toyota Manila Bay's AI Assistant. Your {{model_or_plate}} is due for preventive maintenance, comprehensive insurance renewal, and registration renewal this month. Skip the hassle of LTO lines and insurance broker visits! Let Toyota Manila Bay take care of all three in just one convenient visit. Would you like to schedule an appointment?",
-      "tl": "Hi {{first_name}}! Ako po ang AI Assistant ng Toyota Manila Bay. Due na po ngayong buwan ang inyong {{model_or_plate}} para sa preventive maintenance, comprehensive insurance renewal, at registration renewal. Iwas na po sa mahabang pila sa LTO at pagpunta sa insurance broker! Hayaan pong asikasuhin ng Toyota Manila Bay ang tatlo sa isang convenient na visit. Gusto po ba ninyong magpa-schedule ng appointment?"},
+      "tl": "Hi {{first_name}}! Ako po ang AI Assistant ng Toyota Manila Bay. Due na po ngayong buwan ang inyong {{model_or_plate}} para sa preventive maintenance, comprehensive insurance renewal, at registration renewal. Iwas na po sa mahabang pila sa LTO at pagpunta sa insurance broker! Hayaan pong asikasuhin ng Toyota Manila Bay ang tatlo sa isang convenient na visit. Gusto po ba ninyong magpa-schedule ng appointment?"
+    },
+    {
+      "id": "SERVICE_CHOICE_PIVOT",
+      "scenario": "Customer declines the 3-in-1 bundle: ask which one service matters most",
+      "when": "Immediately after a clear no to the combined offer. Ask once, without repeating the vehicle, due dates, or original sales pitch. A no to all services or stop request closes or opts out; do not keep offering. Customer can choose one or several services freely.",
+      "used_by": "assistant",
+      "en": "No worries, {{first_name}}! We can focus on just one service instead. Which would you prefer to prioritize: Preventative Maintenance Service, LTO Registration Renewal, or Comprehensive Insurance Renewal?",
+      "tl": "No problem po, {{first_name}}! Pwede naman pong isang service lang muna ang asikasuhin natin. Alin po ang gusto ninyong unahin: Preventative Maintenance Service, LTO Registration Renewal, o Comprehensive Insurance Renewal?"
+    },
     {
       "id": "RESUME_COMBINED_OFFER",
       "scenario": "Continue the opening offer without repeating the introduction",
       "when": "The combined opening offer has not yet been accepted or declined.",
       "used_by": "service",
-      "en": "Would you like an appointment to handle your preventive maintenance, comprehensive insurance and registration renewal together?",
-      "tl": "Gusto po ba ninyong magpa-appointment para sabay maasikaso ang preventive maintenance, comprehensive insurance at registration renewal?"
+      "en": "Would you prefer to handle all three in one visit?",
+      "tl": "Gusto po ba ninyong sabay nang asikasuhin ang tatlo sa isang visit?"
     },
     {
       "id": "GREETING_ACK",
@@ -68,7 +77,7 @@
     {
       "id": "RESUME_SERVICE_OFFER",
       "scenario": "Continue the current offer after a greeting",
-      "when": "The service follows a greeting with one short question about the current service. Do not switch services or repeat the full introduction.",
+      "when": "Only resume a service the customer has already chosen; never reopen a declined bundle or pitch an unselected service.",
       "used_by": "service",
       "en": "Would you like help with {{service_name}}?",
       "tl": "Gusto po ba ninyo ng tulong sa {{service_name}}?"
@@ -84,34 +93,34 @@
     {
       "id": "PMS_OFFER_DUE_SOON",
       "scenario": "Service 2: regular maintenance",
-      "when": "Ask after registration is accepted, declined or skipped. Do not arrange dates until insurance has also been answered.",
+      "when": "Use only if the customer chose Preventative Maintenance Service or explicitly asked about it. Do not automatically offer after registration. Avoid repeating vehicle information or due status.",
       "used_by": "assistant",
-      "en": "Your car is also coming up for regular maintenance. Would you like us to include maintenance in your visit request?",
-      "tl": "Malapit na rin pong due sa regular maintenance ang sasakyan ninyo. Gusto po ba ninyong isama ang maintenance sa visit request?"
+      "en": "We can help arrange your Preventative Maintenance Service. Would you like to set up a visit?",
+      "tl": "Pwede po naming asikasuhin ang inyong Preventative Maintenance Service. Gusto po ba ninyong magpa-schedule ng visit?"
     },
     {
       "id": "PMS_OFFER_OVERDUE",
       "scenario": "Service 2: regular maintenance",
-      "when": "Ask after registration is accepted, declined or skipped. Do not arrange dates until insurance has also been answered.",
+      "when": "Use only if the customer chose Preventative Maintenance Service or explicitly asked about it. Do not automatically offer after registration. Avoid repeating vehicle information or due status.",
       "used_by": "assistant",
-      "en": "We can also help with your car's regular maintenance. Would you like to include it in your visit request?",
-      "tl": "Matutulungan din po namin kayo sa regular maintenance. Gusto po ba ninyong isama ito sa visit request?"
+      "en": "We can help arrange your Preventative Maintenance Service. Would you like to set up a visit?",
+      "tl": "Pwede po naming asikasuhin ang inyong Preventative Maintenance Service. Gusto po ba ninyong magpa-schedule ng visit?"
     },
     {
       "id": "PMS_OFFER_RETURNING",
       "scenario": "Service 2: regular maintenance",
-      "when": "Ask after registration is accepted, declined or skipped. Do not arrange dates until insurance has also been answered.",
+      "when": "Use only if the customer chose Preventative Maintenance Service or explicitly asked about it. Do not automatically offer after registration. Avoid repeating vehicle information or due status.",
       "used_by": "assistant",
-      "en": "We'd be happy to help with your car's regular maintenance again. Would you like to include it in your visit request?",
-      "tl": "Masaya po kaming asikasuhin ulit ang regular maintenance ng sasakyan ninyo. Gusto po ba ninyong isama ito sa visit request?"
+      "en": "We can help arrange your Preventative Maintenance Service. Would you like to set up a visit?",
+      "tl": "Pwede po naming asikasuhin ang inyong Preventative Maintenance Service. Gusto po ba ninyong magpa-schedule ng visit?"
     },
     {
       "id": "PMS_OFFER_FIRST",
       "scenario": "Service 2: regular maintenance",
-      "when": "Ask after registration is accepted, declined or skipped. Do not arrange dates until insurance has also been answered.",
+      "when": "Use only if the customer chose Preventative Maintenance Service or explicitly asked about it. Do not automatically offer after registration. Avoid repeating vehicle information or due status.",
       "used_by": "assistant",
-      "en": "We can also take care of your car's regular maintenance. Would you like to include it in your visit request?",
-      "tl": "Pwede rin po naming asikasuhin ang regular maintenance ng sasakyan ninyo. Gusto po ba ninyong isama ito sa visit request?"
+      "en": "We can help arrange your Preventative Maintenance Service. Would you like to set up a visit?",
+      "tl": "Pwede po naming asikasuhin ang inyong Preventative Maintenance Service. Gusto po ba ninyong magpa-schedule ng visit?"
     },
     {
       "id": "PMS_PRICE_INFO",
@@ -134,35 +143,35 @@
     {
       "id": "INSURANCE_OFFER_EXPIRING",
       "scenario": "Service 3: car insurance",
-      "when": "Only while insurance is current, after registration and maintenance have been answered. A status question is not consent.",
+      "when": "Use only when customer chooses insurance or asks about it. Never automatically upsell after another service. Do not repeat expiry dates or unrequested estimates. Quote and policy require insurer approval.",
       "used_by": "assistant",
-      "en": "Your car insurance ends on {{comp_expiry_date}}. We can get you a renewal quote, usually around {{insurance_price}}. The insurance company still has to approve it. Want us to start?",
-      "tl": "Matatapos po ang car insurance ninyo sa {{comp_expiry_date}}. Pwede po kaming kumuha ng renewal quote, karaniwan po ay around {{insurance_price}}. Aprubahan pa po ito ng insurance company. Gusto po ba ninyong simulan namin?",
+      "en": "We can help you explore comprehensive insurance renewal options. Would you like a quote?",
+      "tl": "Pwede po namin kayong tulungan sa comprehensive insurance renewal options. Gusto po ba ninyong humingi ng quotation?",
       "fallback_en": "An advisor can confirm a car insurance estimate. The insurance company still has to approve it. Would you like to discuss insurance?",
       "fallback_tl": "Advisor po ang magkukumpirma ng estimate sa car insurance. Kailangan pa rin ng approval ng insurance company. Gusto po ninyong pag-usapan ang insurance?"
     },
     {
       "id": "INSURANCE_OFFER_LAPSED",
       "scenario": "Service 3: car insurance",
-      "when": "Only while insurance is current, after registration and maintenance have been answered. A status question is not consent.",
+      "when": "Use only when customer chooses insurance or asks about it. Never automatically upsell after another service. Do not repeat expiry dates or unrequested estimates. Quote and policy require insurer approval.",
       "used_by": "assistant",
-      "en": "It looks like your car insurance has ended. We can get you a new quote, usually around {{insurance_price}}. The insurance company still has to approve it. Want us to start?",
-      "tl": "Mukhang tapos na po ang car insurance ninyo. Pwede po kaming kumuha ng bagong quote, karaniwan po ay around {{insurance_price}}. Aprubahan pa po ito ng insurance company. Gusto po ba ninyong simulan namin?",
+      "en": "We can help you explore comprehensive insurance renewal options. Would you like a quote?",
+      "tl": "Pwede po namin kayong tulungan sa comprehensive insurance renewal options. Gusto po ba ninyong humingi ng quotation?",
       "fallback_en": "An advisor can confirm a car insurance estimate. The insurance company still has to approve it. Would you like to discuss insurance?",
       "fallback_tl": "Advisor po ang magkukumpirma ng estimate sa car insurance. Kailangan pa rin ng approval ng insurance company. Gusto po ninyong pag-usapan ang insurance?"
     },
     {
       "id": "INSURANCE_OFFER",
       "scenario": "Service 3: car insurance",
-      "when": "Always ask after registration and maintenance have been answered, even if both were declined or the recorded policy is active.",
+      "when": "Use only when customer chooses insurance or asks about it. Never automatically upsell after another service. Do not repeat expiry dates or unrequested estimates. Quote and policy require insurer approval.",
       "used_by": "assistant",
-      "en": "Would you also like help with car insurance? Any policy still needs approval from the insurance company.",
-      "tl": "Gusto rin po ba ninyo ng tulong sa car insurance? Kailangan pa rin po ng approval ng insurance company ang anumang policy."
+      "en": "We can help you explore comprehensive insurance renewal options. Would you like a quote?",
+      "tl": "Pwede po namin kayong tulungan sa comprehensive insurance renewal options. Gusto po ba ninyong humingi ng quotation?"
     },
     {
       "id": "INSURANCE_ASK_STATUS",
       "scenario": "Service 3: car insurance",
-      "when": "Only while insurance is current, after registration and maintenance have been answered. A status question is not consent.",
+      "when": "Ask only when the customer has selected insurance and status is necessary to answer their question. This is not consent.",
       "used_by": "assistant",
       "en": "Is your car insurance still active? If it is ending soon, we can get you a renewal quote.",
       "tl": "Active pa po ba ang car insurance ninyo? Kung matatapos na po ito, pwede po kaming kumuha ng renewal quote."
@@ -196,27 +205,27 @@
     {
       "id": "RENEWAL_OFFER_UPCOMING",
       "scenario": "Service 1: registration renewal",
-      "when": "Registration is the first offer. Give the supplied renewal period; do not ask for an appointment date yet.",
+      "when": "Only after customer chooses registration or directly asks about it; do not restate due date or price unless requested. Do not automatically offer maintenance or insurance afterward.",
       "used_by": "assistant",
-      "en": "Your renewal period is {{reg_window_start}} to {{reg_window_end}}. Our fee is estimated at {{reg_service_fee}}, plus actual government registration charges; an advisor confirms the total. Would you like help?",
-      "tl": "Ang renewal period po ninyo ay {{reg_window_start}} hanggang {{reg_window_end}}. Estimated na {{reg_service_fee}} po ang fee namin, bukod sa actual government registration charges; advisor ang magko-confirm ng total. Gusto po ninyo ng tulong?",
+      "en": "We can handle the LTO renewal paperwork for you. Would you like help arranging it?",
+      "tl": "Pwede po naming asikasuhin ang LTO renewal paperwork para sa inyo. Gusto po ba ninyong magpa-assist?",
       "fallback_en": "You can renew your registration anytime from {{reg_window_start}} to {{reg_window_end}}. Our advisor will confirm the fee and government registration charges. Want us to handle it for you?",
       "fallback_tl": "Pwede po ninyong i-renew ang registration anumang araw mula {{reg_window_start}} hanggang {{reg_window_end}}. Kukumpirmahin ng advisor ang fee at ang government registration charges. Gusto po ba ninyong kami na ang mag-asikaso?"
     },
     {
       "id": "RENEWAL_OFFER_OPEN",
       "scenario": "Service 1: registration renewal",
-      "when": "Registration is the first offer. Give the supplied renewal period; do not ask for an appointment date yet.",
+      "when": "Legacy registration-specific follow-up only if the customer explicitly asks for a registration reminder. NEVER use as the response to declining the 3-in-1 bundle; use SERVICE_CHOICE_PIVOT instead. Keep approved copy unchanged.",
       "used_by": "assistant",
-      "en": "No problem, {{first_name}}! Just a friendly reminder that your {{model_or_plate}} registration is due for renewal soon. Avoid the hassle of long LTO lines and let Toyota Manila Bay handle the renewal for you. Would you like us to help you schedule your vehicle registration renewal?",
-      "tl": "No problem po, {{first_name}}! Paalala lang po na malapit nang mag-expire ang registration ng inyong {{model_or_plate}}. Iwas na po sa mahabang pila sa LTO! Hayaan pong Toyota Manila Bay ang mag-asikaso ng inyong registration renewal. Gusto po ba ninyong magpa-schedule para dito?",
+      "en": "No problem, {{first_name}}! Just a friendly reminder that your car registration is due for renewal soon. Let Toyota Manila Bay handle the renewal for you. Would you like us to help you schedule your vehicle registration renewal?",
+      "tl": "No problem po, {{first_name}}! Paalala lang po na malapit nang mag-expire ang registration ng inyong kotse. Iwas na po sa mahabang pila sa LTO! Hayaan pong Toyota Manila Bay ang mag-asikaso ng inyong registration renewal. Gusto po ba ninyong magpa-schedule para dito?",
       "fallback_en": "You can renew your registration now, anytime until {{reg_window_end}}. Our advisor will confirm the fee and government registration charges. Want us to handle it for you?",
       "fallback_tl": "Pwede na po ninyong i-renew ang registration, anumang araw hanggang {{reg_window_end}}. Kukumpirmahin ng advisor ang fee at ang government registration charges. Gusto po ba ninyong kami na ang mag-asikaso?"
     },
     {
       "id": "REG_ALREADY_RENEWED",
       "scenario": "Registration already renewed",
-      "when": "Mark only the current renewal service skipped, then ask about maintenance. Do not end the conversation.",
+      "when": "Customer says registration already renewed. Acknowledge and stop registration offer. Do not automatically ask about maintenance.",
       "used_by": "assistant",
       "en": "Great, thanks for letting me know! That's one less thing to worry about.",
       "tl": "Ayos po, salamat sa pagsabi! Isang aasikasuhin na lang po ang nabawas."
@@ -232,7 +241,7 @@
     {
       "id": "SLOTS_OFFER",
       "scenario": "Ask for a preferred date within the supplied window",
-      "when": "Only after all three services have been asked and answered, with at least one accepted. A preferred day is a request, not guaranteed availability.",
+      "when": "After the customer explicitly accepts one or more services and is ready to request a date. Do not wait for responses to all three. Confirm dealership availability; never claim a confirmed slot.",
       "used_by": "assistant",
       "en": "For your selected services, which day from {{booking_window_start}} to {{booking_window_end}} works for a visit to {{branch_name}}? The dealership must confirm availability.",
       "tl": "Para sa napili ninyong serbisyo, aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang gusto ninyo sa {{branch_name}}? Kailangan pang kumpirmahin ng dealership ang availability."
@@ -240,7 +249,7 @@
     {
       "id": "SLOTS_OFFER_RENEWAL",
       "scenario": "Ask for a preferred date within the supplied window",
-      "when": "Only after all three services have been asked and answered, with at least one accepted. A preferred day is a request, not guaranteed availability.",
+      "when": "After customer selects registration and wants to request a date; no need to ask about other services. Confirm availability; do not claim a confirmed slot.",
       "used_by": "assistant",
       "en": "For your selected services, which day from {{booking_window_start}} to {{booking_window_end}} works for a visit to {{branch_name}}? The dealership must confirm availability.",
       "tl": "Para sa napili ninyong serbisyo, aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang gusto ninyo sa {{branch_name}}? Kailangan pang kumpirmahin ng dealership ang availability."
@@ -306,18 +315,18 @@
     {
       "id": "ONLY_THIS_SERVICE",
       "scenario": "Negotiation: customer wants just one service",
-      "when": "Customer says 'just the maintenance', 'yung isa lang', or similar. Fill {{service_name}} with the service they chose.",
+      "when": "Customer chooses exactly one service. Record that service only; do not ask about the other two. For insurance quotes, ask whether they want a quote rather than a visit if appropriate.",
       "used_by": "assistant",
-      "en": "Of course, we can do just the {{service_name}}. Want me to find a time?",
-      "tl": "Sige po, {{service_name}} lang. Gusto po ba ninyong hanapan ko kayo ng oras?"
+      "en": "Of course! We can focus on {{service_name}}. Would you like to arrange a visit?",
+      "tl": "Sige po! {{service_name}} lang muna. Gusto po ba ninyong magpa-schedule ng visit?"
     },
     {
       "id": "COMBINE_OK",
       "scenario": "Negotiation: customer asks to do several services together",
       "when": "Customer asks if more than one can be done in one visit.",
       "used_by": "assistant",
-      "en": "Yes, we can do them in one visit at {{branch_name}}. Which ones would you like?",
-      "tl": "Opo, pwede po sa isang visit sa {{branch_name}}. Alin po ang gusto ninyo?"
+      "en": "Of course! We can include those in one visit. Which services would you like to combine?",
+      "tl": "Opo! Pwede po nating pagsabayin ang mga iyon sa isang visit. Aling services po ang gusto ninyong isama?"
     },
     {
       "id": "PRICE_CONCERN_PMS",
@@ -354,7 +363,7 @@
     {
       "id": "THINKING_TIME",
       "scenario": "Negotiation: customer wants time to think",
-      "when": "Do not repeat the offer.",
+      "when": "Customer wants to think. Do not repeat or pivot to other offers; wait for customer to re-engage.",
       "used_by": "assistant",
       "en": "Sure, take your time. If you have any questions, just ask me here.",
       "tl": "Sige po, take your time. Kung may tanong po kayo, itanong lang po dito."
@@ -420,34 +429,34 @@
     {
       "id": "SERVICE_ACCEPTED_ACK",
       "scenario": "Acknowledge the service just accepted",
-      "when": "The service prefixes this to the next offer, date question or closing after an accepted decision. This records interest, not a confirmed booking.",
+      "when": "Optional short acknowledgment only if the next message does not already acknowledge acceptance. Never prefix a duplicate acknowledgement; do not imply booking is confirmed.",
       "used_by": "service",
-      "en": "Thanks! I've noted your interest in {{service_name}}.",
-      "tl": "Sige po, noted ang request ninyo para sa {{service_name}}."
+      "en": "Sure, I can help with that.",
+      "tl": "Sige po, tutulungan ko kayo diyan."
     },
     {
       "id": "SERVICE_DECLINED_ACK",
       "scenario": "Acknowledge the service just declined",
-      "when": "The service prefixes this before continuing after a declined decision. Respect the refusal without pressure.",
+      "when": "Optional acknowledgment after declining a specific service; do not automatically pitch the remaining services. If customer declines all, close politely. Never double-acknowledge.",
       "used_by": "service",
-      "en": "We understand. We'll leave out {{service_name}}.",
-      "tl": "Naiintindihan po namin. Hindi natin isasama ang {{service_name}}."
+      "en": "Of course, no problem.",
+      "tl": "Sige po, walang problema."
     },
     {
       "id": "SERVICE_SKIPPED_ACK",
       "scenario": "Acknowledge a service already handled or not needed",
-      "when": "The service prefixes this before continuing after a skipped decision, including an already-renewed or already-serviced reply.",
+      "when": "Only if a brief acknowledgement is useful and not already in the next response. Do not launch another offer.",
       "used_by": "service",
-      "en": "Thanks for letting us know. We'll skip {{service_name}}.",
-      "tl": "Salamat po sa pagsabi. Hindi na natin isasama ang {{service_name}}."
+      "en": "Thanks for letting me know!",
+      "tl": "Salamat po sa pagsabi!"
     },
     {
       "id": "DECLINE_CLOSE",
       "scenario": "Owner declines",
-      "when": "Only after registration, maintenance and insurance have all been asked and answered, with zero accepted. No booking is created.",
+      "when": "Customer declines all services, does not want help, or refuses further offers. Close without insisting all three be asked.",
       "used_by": "assistant",
-      "en": "Thank you for your time. No services or booking were requested. You can still ask general service questions here.",
-      "tl": "Salamat po sa oras ninyo. Wala pong hiniling na serbisyo o booking. Pwede pa rin po kayong magtanong tungkol sa mga serbisyo dito."
+      "en": "No worries at all! Thanks for your time. Feel free to message us if you need anything.",
+      "tl": "Walang problema po! Salamat sa oras ninyo. Mag-message lang po kung may kailangan kayo."
     },
     {
       "id": "CALLBACK_ASK",

@@ -141,7 +141,8 @@ public class GoipWebInboxPoller {
 				result("invalid_message");
 				continue;
 			}
-			boolean demoReply = phone && demo != null && demo.accepts(channel.accountId(), sender);
+			boolean demoReply = phone && demo != null
+					&& (SmsTmbgDemoService.isReset(message.content()) || demo.accepts(channel.accountId(), sender));
 			boolean process = false;
 			if (phone && message.receivedAt() >= baselines.get(channel.accountId())) {
 				var identity = customers.identity("SMS", channel.accountId(), sender).orElse(null);

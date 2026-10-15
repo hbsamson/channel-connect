@@ -39,16 +39,24 @@ public class SmsTmbgDemoService {
 	}
 
 	public boolean handles(SmsInbound incoming) {
-		return incoming.status().equals("PROCESSING") && accepts(incoming.accountId(), incoming.sender());
+		return incoming.status().equals("PROCESSING")
+				&& (isReset(incoming.content()) || accepts(incoming.accountId(), incoming.sender()));
 	}
 
 	public synchronized void process(SmsInbound incoming) {
 		if (!handles(incoming)) return;
-		String reply = assistant.reply("SMS", incoming.accountId(), incoming.sender(), incoming.id(), incoming.content());
+		boolean reset = isReset(incoming.content());
+		String reply = reset ? assistant.greeting("SMS", incoming.sender())
+				: assistant.reply("SMS", incoming.accountId(), incoming.sender(), incoming.id(), incoming.content());
 		if (reply != null) {
 			sms.validate(incoming.accountId(), incoming.sender(), reply);
 			messages.enqueue("reply:" + incoming.id(), incoming.accountId(), incoming.sender(), reply, null);
 		}
+		if (reset) assistant.start("SMS", incoming.accountId(), incoming.sender());
 		messages.completeInbound(incoming.id());
+	}
+
+	public static boolean isReset(String content) {
+		return "/reset".equalsIgnoreCase(content.trim());
 	}
 }
