@@ -16,6 +16,7 @@ For the supplied [TMBG 3-in-1 SMS demo](tmbg-sms-demo.md), keep the existing SMS
 | `application-sms-http-two-lines.properties` | Same web form, SIMs 1 and 2 | Same settings as `sms-http`; replaces that profile |
 | `application-sms-http-api.properties` | Hosted PHP send API; hosted reception is opt-in | `SMS_GOIP_API_SEND_URL`, `SMS_GOIP_GATEWAY_ID`, `SMS_API_TOKEN` |
 | `application-sms-own-receive.properties` | Add after the sender profile to receive directly from GoIP over UDP | `SMS_GOIP_IPADDRESS`, `SMS_UDP_BIND_ADDRESS`, `SMS_UDP_PORT`, `SMS_GOIP_UDP_ID`, `SMS_GOIP_UDP_PASSWORD`; two-line sender also requires `SMS_GOIP_UDP_ID_2`, `SMS_GOIP_UDP_PASSWORD_2` |
+| `application-sms-web-receive.properties` | Add after `sms-http` or `sms-http-two-lines` to poll the GoIP8 HTML inbox | Reuses `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`; optional `SMS_GOIP_WEB_INBOX_ZONE` |
 | `application-sms-mock.properties` | Loopback UDP simulator; no physical gateway | `SMS_MOCK_AUTH_ID`, `SMS_MOCK_PASSWORD`, `SMS_API_TOKEN` |
 
 For direct gateway testing, set `SMS_LIVE_AUTHORIZED=true` in `.env` and use `--spring.profiles.active=local,sms-http`. The two-line and hosted API modes also require live authorization. An IDE environment-file loader or an existing operating-system environment variable can override the profile's authorization default. If the error still says `HTTP requires live-authorized=true`, remove a stale `SMS_LIVE_AUTHORIZED=false` from the IntelliJ run configuration or its inherited environment and restart. There is no need to activate `demo` or use a launcher script.
@@ -92,6 +93,18 @@ Hourly transmission attempts and minimum send intervals are persisted. Queue lim
 Content cleanup removes completed SMS content from the SMS tables and their dealership history copies. Completed inbox/outbox IDs expire after ID retention, allowing later ID reuse. **Unknown outbound idempotency tombstones remain indefinitely**, with content removed after content retention, so expiry cannot authorize an uncertain resend. Dead-letter content has the same configured retention; resolve or export failures before expiry. Protect the database volume and backups, and plan disk capacity for retained tombstones.
 
 ## Receive through this application's API
+
+### Direct GoIP8 web inbox (Basic Auth)
+
+For firmware exposing `/default/en_US/tools.html?type=sms_inbox`, use **`local,sms-http-two-lines,sms-web-receive`** (or `sms-http` for SIM 1). Replace `sms-own-receive` with `sms-web-receive`. Set `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, and `SMS_GOIP_PASS` privately to the device's address and web login. No hosted API URL/key or UDP credentials are needed, and the gateway's existing SMS-server destination can stay unchanged.
+
+The application continuously GETs that read-only page with Basic Auth every `SMS_POLL_INTERVAL` (default `3s`), with at most one snapshot request in flight. It parses the embedded per-SIM `sms` arrays without executing JavaScript. Only configured SIMs are retained. Sender, body (including commas and newlines), and receipt time become inbox records exposed through `/api/v1/sms/receive` and `/api/v1/sms/receive-all`; page navigation, scripts and device metadata are excluded. HTML entities are decoded. “Clean up” means extracting data: no messages are deleted from the gateway.
+
+Repeated snapshots are deduplicated using SIM, timestamp, sender and content rather than changing slot positions. Existing entries are retained without generating historic automatic replies. Fresh replies enter the existing demo/verified-identity processing rules, with only the latest eligible reply per demo participant in each snapshot processed. A persistent source baseline survives application restarts. The device provides only 20 entries per SIM and no year or unique receipt ID: the parser infers the year from the page's device clock (dates ahead of that clock use the preceding year), and identical SMS from the same sender in the same second collapse into one receipt. Entries overwritten between polls cannot be recovered. Set `SMS_GOIP_WEB_INBOX_ZONE` to the gateway's clock zone (default `Asia/Manila`).
+
+Timeouts, rejected credentials and invalid pages are logged without credentials or SMS contents; polling retries on subsequent ticks. Requests are bounded by `SMS_GOIP_TIMEOUT` and `SMS_GOIP_API_MAX_RESPONSE_BYTES`. The supplied HTML was inspected; live device reception has not been verified.
+
+### Direct UDP reception
 
 Use `local,sms-http,sms-own-receive` for direct web-form sending and application-owned reception, `local,sms-http-two-lines,sms-own-receive` for SIMs 1 and 2, or `local,sms-http-api,sms-own-receive` to retain the hosted sender. The last profile disables hosted receive polling and clears its receive URL/key. Enabling direct reception also prevents the hosted poller from starting even if `SMS_GOIP_API_RECEIVE_ENABLED=true` remains in the environment. Incoming SMS is authenticated and persisted by this application's existing GoIP UDP receiver; `/api/v1/sms/receive` and `/api/v1/sms/receive-all` read that local inbox without calling smsgateway. Their authentication, filters, response bodies, and cursors are unchanged.
 

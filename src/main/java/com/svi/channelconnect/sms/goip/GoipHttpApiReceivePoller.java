@@ -42,7 +42,7 @@ import com.svi.channelconnect.sms.service.SmsValidation;
 /** Retains the hosted inbox; only eligible fresh customer replies enter conversation processing. */
 @Component
 @ConditionalOnProperty(name = {"sms.enabled", "sms.http-api.receive-enabled"}, havingValue = "true")
-@ConditionalOnExpression("('${sms.mode:MOCK}' == 'HTTP_API' || '${sms.mode:MOCK}' == 'HTTP') && !${sms.http-inbound.enabled:false}")
+@ConditionalOnExpression("('${sms.mode:MOCK}' == 'HTTP_API' || '${sms.mode:MOCK}' == 'HTTP') && !${sms.http-inbound.enabled:false} && !${sms.web-inbox.enabled:false}")
 public class GoipHttpApiReceivePoller {
 	private static final Logger LOGGER = LoggerFactory.getLogger(GoipHttpApiReceivePoller.class);
 	private static final int MAX_SNAPSHOT_MESSAGES = 1000;

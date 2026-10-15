@@ -24,7 +24,7 @@ import com.svi.channelconnect.sms.persistence.SmsMessageRepository;
 /** GoIP documents UDP reception even when outbound messages use its HTTP web form. */
 @Component
 @ConditionalOnProperty(name = {"sms.enabled", "sms.http-inbound.enabled"}, havingValue = "true")
-@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP' || '${sms.mode:MOCK}' == 'HTTP_API'")
+@ConditionalOnExpression("('${sms.mode:MOCK}' == 'HTTP' || '${sms.mode:MOCK}' == 'HTTP_API') && !${sms.web-inbox.enabled:false}")
 public class GoipHttpInboundListener implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(GoipHttpInboundListener.class);
 	private final SmsProperties properties;

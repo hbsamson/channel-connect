@@ -30,7 +30,7 @@ import com.svi.channelconnect.sms.provider.SmsProvider;
 /** Implements the supplied Postman PHP gateway requests without retrying uncertain submissions. */
 @Component
 @ConditionalOnProperty(name = "sms.enabled", havingValue = "true")
-@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP_API' || ('${sms.mode:MOCK}' == 'HTTP' && ${sms.http-api.receive-enabled:false} && !${sms.http-inbound.enabled:false})")
+@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP_API' || ('${sms.mode:MOCK}' == 'HTTP' && ${sms.http-api.receive-enabled:false} && !${sms.http-inbound.enabled:false} && !${sms.web-inbox.enabled:false})")
 public class GoipHttpApiClient {
 	private final GoipHttpApiProperties properties;
 	private final SmsProperties smsProperties;
@@ -114,13 +114,13 @@ public class GoipHttpApiClient {
 		@Override public String toString() { return "HttpApiResponse[statusCode=" + statusCode + ", body=<redacted>]"; }
 	}
 
-	private static final class LimitedBodySubscriber implements HttpResponse.BodySubscriber<byte[]> {
+	static final class LimitedBodySubscriber implements HttpResponse.BodySubscriber<byte[]> {
 		private final HttpResponse.BodySubscriber<byte[]> delegate = HttpResponse.BodySubscribers.ofByteArray();
 		private final int maximumBytes;
 		private Flow.Subscription subscription;
 		private long receivedBytes;
 		private boolean completed;
-		private LimitedBodySubscriber(int maximumBytes) { this.maximumBytes = maximumBytes; }
+		LimitedBodySubscriber(int maximumBytes) { this.maximumBytes = maximumBytes; }
 		@Override public CompletionStage<byte[]> getBody() { return delegate.getBody(); }
 		@Override public void onSubscribe(Flow.Subscription subscription) {
 			this.subscription = subscription;
