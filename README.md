@@ -30,6 +30,84 @@ For the October 16 campaign demo, run the PowerShell launcher and scenario runne
 
 Configuration, logging and Flyway migrations are under `src/main/resources`. Test settings and webhook fixtures are under `src/test/resources`. Tests use fake credentials and mocked external providers.
 
+## Meta webhook setup
+
+Start the application with `local` and expose port 8080 through a public HTTPS tunnel, for example `ngrok http 8080`. Use the tunnel's public HTTPS origin in the callbacks below; `http://localhost:4040` is only ngrok's local request inspector. Update Meta's callbacks whenever the tunnel hostname changes.
+
+### WhatsApp: subscribe the app to the business account
+
+In the Meta app's WhatsApp setup, copy the **Phone Number ID** into `WHATSAPP_PHONE_NUMBER_ID` and the **WhatsApp Business Account ID** into `WHATSAPP_WABA_ID`. These are different identifiers. Set `WHATSAPP_ACCESS_TOKEN` to a token issued for the intended app with access to that account and the required WhatsApp permissions (`whatsapp_business_management` for subscription management and `whatsapp_business_messaging` for messaging). Keep these values in the untracked `.env`.
+
+Configure the WhatsApp callback as `https://<public-host>/webhooks/whatsapp`, verify it using the same value as `WHATSAPP_VERIFY_TOKEN`, and subscribe to the `messages` field. `META_APP_SECRET` must belong to this app because the server validates Meta's webhook signatures.
+
+There is also an **account-level app subscription**. The `messages` toggle and a successful dashboard sample event do not establish that this app is subscribed to the WABA. In the no-incoming-messages incident, the WABA initially listed only Meta's `WA DevX Webhook Events 1P App`. The fix was to verify that the configured access token belonged to the intended developer app, then call `POST /<WABA-ID>/subscribed_apps` using that token. A final GET confirmed that the intended app appeared alongside the existing subscription. This subscribes the token's app to the business account's phone-number events; it does not register or change the phone number.
+
+To repeat that operation, run the following in PowerShell from the repository root. Replace the expected App ID with the ID shown in your Meta developer dashboard. This reads the plain, unquoted Meta values from `.env` without printing credentials. It does not change `.env` or send a WhatsApp message.
+
+```powershell
+$expectedAppId = '<your-meta-developer-app-id>'
+$metaSettings = @{}
+Get-Content -LiteralPath .env | ForEach-Object {
+    if ($_ -match '^\s*([^#=\s]+)\s*=(.*)$') {
+        $metaSettings[$matches[1]] = $matches[2].Trim()
+    }
+}
+
+$version = $metaSettings['META_GRAPH_API_VERSION']
+$wabaId = $metaSettings['WHATSAPP_WABA_ID']
+if ($version -notmatch '^v\d+\.\d+$' -or $wabaId -notmatch '^\d+$' -or
+    [string]::IsNullOrWhiteSpace($metaSettings['WHATSAPP_ACCESS_TOKEN'])) {
+    throw 'Set META_GRAPH_API_VERSION, WHATSAPP_WABA_ID and WHATSAPP_ACCESS_TOKEN in .env first.'
+}
+$graphBase = 'https://graph.facebook.com/' + $version
+$headers = @{ Authorization = 'Bearer ' + $metaSettings['WHATSAPP_ACCESS_TOKEN'] }
+
+# Confirm which app will be subscribed. Stop if this is the wrong token.
+$app = Invoke-RestMethod -Uri ($graphBase + '/app?fields=id,name') `
+    -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+if ($app.id -ne $expectedAppId) {
+    throw 'The configured WhatsApp token belongs to a different app.'
+}
+
+$subscriptionUri = $graphBase + '/' + $wabaId + '/subscribed_apps'
+$before = Invoke-RestMethod -Uri $subscriptionUri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+$before.data.whatsapp_business_api_data | Select-Object id, name
+
+# Add this app if missing; leave the existing app subscriptions in place.
+if (@($before.data.whatsapp_business_api_data.id) -notcontains $expectedAppId) {
+    $result = Invoke-RestMethod -Method Post -Uri $subscriptionUri `
+        -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+    if (-not $result.success) { throw 'Meta did not confirm the subscription.' }
+}
+
+$after = Invoke-RestMethod -Uri $subscriptionUri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+$after.data.whatsapp_business_api_data | Select-Object id, name
+if (@($after.data.whatsapp_business_api_data.id) -notcontains $expectedAppId) {
+    throw 'The expected app is still missing from the WABA subscriptions.'
+}
+Write-Output 'Expected app is subscribed to the WhatsApp Business Account.'
+```
+
+The administrative command uses `WHATSAPP_WABA_ID`; the running application's send endpoint and inbound account filter use `WHATSAPP_PHONE_NUMBER_ID`. Use the account that owns the configured phone number. Subscription changes take effect on Meta without restarting the application; `.env` changes require a restart. See [Meta's account-subscription API instructions](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api?entity=request-13382743-eb9a6721-1056-4db2-b00a-2290e04b5b5d).
+
+To check reception, click **Test**, then **Send to My Server** beside `messages` and look for `POST /webhooks/whatsapp` in ngrok. A `200` from a sample event proves endpoint reachability and authentication; samples using a different phone-number ID are ignored and do not produce replies. Then send a real text from your test handset to the Meta test number. Incoming messages for the configured number should produce `WhatsApp webhook handled` logs. In `local`, the first fresh conversation message starts the TMBG demo greeting; later messages use the booking assistant. A received reply confirms more than the dashboard sample alone.
+
+### Messenger: configure the Page and add more testers
+
+Keep Messenger's callback separate: `https://<public-host>/api/webhooks/messenger`. Verify it with `META_VERIFY_TOKEN`. In the app's Messenger setup, connect the intended Facebook Page, generate its Page access token, and set `META_PAGE_ID` and `META_PAGE_ACCESS_TOKEN` in `.env`. Subscribe the Page to the app's Messenger webhooks, including `messages`. The Page token needs `pages_messaging`; connecting/subscribing the Page also requires the appropriate Page-management permissions and access. Restart after changing local configuration. See [Meta's Messenger setup documentation](https://developers.facebook.com/docs/messenger-platform/get-started/).
+
+For additional people testing an app in Development mode:
+
+1. Each tester uses their own Facebook account and registers for Meta for Developers if required by the invitation flow.
+2. An app administrator opens the correct app at [Meta for Developers](https://developers.facebook.com/apps/), then **App roles → Roles → Add people** (some dashboard layouts show an **Add testers** button).
+3. Select the **Tester** role and invite the person's Facebook account using the identifier requested by the dashboard. This is a real person assigned a tester role; the separate generated **Test Users** feature is not needed for this flow.
+4. The invited person signs in to that Facebook account and accepts the app-role invitation through their notification or the [developer requests page](https://developers.facebook.com/requests/). Confirm their role is accepted rather than pending before proceeding. See [Meta's app-role documentation](https://developers.facebook.com/docs/development/build-and-test/app-roles/).
+5. From that same person's Messenger account, open the configured Facebook Page and send a fresh text such as `Hello`. Send as the person, rather than switching into the Page identity. Check ngrok for `POST /api/webhooks/messenger` and the application for `Messenger processing stage=booking_demo` in `local`.
+
+Repeat the invitation and acceptance for each tester. Adding testers does not require changing the Page token, adding WhatsApp recipients, or restarting this application. Each sender receives a separate local demo conversation; no separate campaign-start request is needed. Page access alone is not a substitute for an accepted app role when testing in Development mode. Availability to people without app roles requires the applicable Meta publication, permission access and App Review requirements; adding a tester does not grant public access.
+
+If one tester works and another produces no incoming request, first check that the second person accepted the invitation for this exact app and is messaging the correct Page. If nobody produces incoming requests, check the Messenger callback and the Page's app subscription. A successful WhatsApp WABA subscription does not subscribe a Messenger Page.
+
 ## HTTP contracts
 
 - Messenger webhook: `GET` and `POST /api/webhooks/messenger`.
