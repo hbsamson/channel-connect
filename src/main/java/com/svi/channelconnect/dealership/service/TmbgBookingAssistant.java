@@ -48,7 +48,7 @@ public class TmbgBookingAssistant {
 	private static final String DEMO_RULES = """
 
 		DEMO OVERRIDES
-		This is a booking demo using a fictional customer. Only a saved booking ends the demo.
+		This is a booking demo using a fictional customer. A saved booking ends booking operations, but general dealership questions remain available.
 		Other outcomes do not close the conversation. Already-renewed customers may continue with PMS or insurance.
 		No callbacks, pickups or human transfers are implemented. Do not promise those actions; say they are unavailable in this demo and return to the registration or booking question.
 		Never set CONFIRMED. Only the service saves a booking and sends its reference.
@@ -56,6 +56,12 @@ public class TmbgBookingAssistant {
 		Map a clear date/time selection to its slot_code internally and request booking_requested. Never require the customer to type a letter.
 		Availability questions, refusals, tentative dates and ambiguous choices are not slot selections. A clear request to book an offered date is a selection, including "Can you book me for...".
 		If a date has multiple offered times, ask which time they want. For an unavailable date, show the available dates/times. Keep SLOTS_OFFERED until a clear selection.
+		GENERAL DEALERSHIP QUESTIONS: Use APPROVED DEALERSHIP KNOWLEDGE to answer questions about Toyota Manila Bay and its services at any stage.
+		For a general question answered by that knowledge, set knowledge_topic to its exact key and reply_text to null; the service supplies the approved answer.
+		Only select a knowledge_topic if its answer actually addresses the latest question. Do not treat unrelated questions as dealership questions or repeat a sales pitch for missing facts.
+		Do not select a topic for booking commands, consent, opt-out, appointment changes, or vehicle-specific facts not covered by that answer. Set knowledge_topic to null otherwise.
+		AFTER CONFIRMED: Never restart booking, offer new slots, cancel, reschedule or claim changes were saved. For changes set outcome to booking_change; otherwise unsupported questions use outcome unavailable. General knowledge questions still use knowledge_topic.
+		Do not invent contact numbers, URLs, prices, offers, address, hours, inventory, availability, warranty promises or advisor handoffs. Tell customers to contact Toyota Manila Bay directly for unsupported requests.
 		""";
 
 	private final AiClient client;
@@ -69,12 +75,14 @@ public class TmbgBookingAssistant {
 	private final List<JsonNode> bookings = new ArrayList<>();
 	private final String rules;
 	private final String instructions;
+	private final TmbgKnowledgeBase knowledge;
 
 	public TmbgBookingAssistant(AiClient client, AiProperties ai, ObjectMapper json, ResourceLoader resources, Clock clock,
 			@Value("${sms.tmbg-bookings-file:bookings.txt}") String bookingsFile) {
 		this.client = client; this.ai = ai; this.json = json; this.clock = clock;
 		this.bookingsFile = Path.of(bookingsFile);
 		try {
+			knowledge = new TmbgKnowledgeBase(resources, json);
 			rules = read(resources, "rules_3in1.txt");
 			instructions = read(resources, "system-prompt.md") + DEMO_RULES;
 			customer = json.readTree(read(resources, "customer_records_3in1.json")).path("records").get(0);
@@ -122,16 +130,26 @@ public class TmbgBookingAssistant {
 		}
 		String cached = session.replies.get(receiptId);
 		if (cached != null) return cached;
-		if (session.stage.equals("CONFIRMED")) return null;
 		session.language = content.toLowerCase(Locale.ROOT).matches(
 				"(?s).*\\b(po|opo|hindi|sige|oo|salamat|magkano|ano|anong|gusto|pwede|puwede|paki|ako|ko|kami|namin|ninyo|niyo|yung|iyong|sa|ng|na|lang|bukas|kailan|paano|wala|meron|ayoko|huwag|wag)\\b.*") ? "tl" : "en";
-		registrationStatus(session, content);
+		String previousRegistration = session.registration;
+		List<String> previousServices = session.services;
+		if (!session.stage.equals("CONFIRMED")) registrationStatus(session, content);
 		Map<String, Object> fields = fields(session, phone(channel, participant));
 		String reply;
 		try {
-			JsonNode answer = ai.provider() == AiProperties.Provider.MOCK ? mockAnswer(session, content, fields)
-					: json.readTree(client.generateResponse(new AiRequest(receiptId, context(session, content, fields), channelText(instructions, channel), true)).text());
-			reply = apply(session, new Incoming(channel, account, participant, receiptId, content), answer, fields);
+			if (session.stage.equals("CONFIRMED") && knowledge.bookingChange(content)) {
+				reply = bookingChangesUnavailable(session);
+			} else {
+				JsonNode answer = ai.provider() == AiProperties.Provider.MOCK ? mockAnswer(session, content, fields)
+						: json.readTree(client.generateResponse(new AiRequest(receiptId, context(session, content, fields), channelText(instructions, channel), true)).text());
+				if (answer != null && (knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, channel) != null
+						|| answer.path("outcome").asString().equals("unavailable"))) {
+					session.registration = previousRegistration;
+					session.services = previousServices;
+				}
+				reply = apply(session, new Incoming(channel, account, participant, receiptId, content), answer, fields);
+			}
 		} catch (RuntimeException exception) {
 			LOGGER.warn("Booking demo reply unavailable; using prepared template");
 			reply = fallback(session, fields);
@@ -156,14 +174,24 @@ public class TmbgBookingAssistant {
 		return "RULES\n" + channelText(rules + DEMO_RULES, session.channel) + "\nCUSTOMER RECORD\n" + json.writeValueAsString(customer)
 				+ "\nDERIVED FIELDS\n" + json.writeValueAsString(fields)
 				+ "\nCONVERSATION STATE\n" + json.writeValueAsString(state)
-				+ "\nTEMPLATES\n" + json.writeValueAsString(filled) + channelText("\nCUSTOMER SMS\n", session.channel) + json.writeValueAsString(text);
+				+ "\nTEMPLATES\n" + json.writeValueAsString(filled)
+				+ "\nAPPROVED DEALERSHIP KNOWLEDGE\n" + json.writeValueAsString(knowledge.answers())
+				+ channelText("\nCUSTOMER SMS\n", session.channel) + json.writeValueAsString(text);
 	}
 
 	private String apply(Session session, Incoming incoming, JsonNode answer, Map<String, Object> fields) {
 		if (answer == null || !answer.isObject() || !Set.of("en", "tl").contains(answer.path("lang").asString())) return fallback(session, fields);
 		session.language = answer.path("lang").asString();
+		if (session.stage.equals("CONFIRMED") && (knowledge.bookingChange(incoming.content())
+				|| Set.of("booking_change", "booking_requested", "callback_requested", "collection_booked").contains(answer.path("outcome").asString()))) {
+			return bookingChangesUnavailable(session);
+		}
+		String approved = knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, session.channel);
+		if (approved != null) return session.language.equals("en") ? fullEnglish(approved) : approved;
+		if (session.stage.equals("CONFIRMED")) return chatUnavailable(session);
 		String template = answer.path("template_id").asString("");
 		String outcome = answer.path("outcome").asString("");
+		if (outcome.equals("unavailable")) return chatUnavailable(session);
 		for (JsonNode flag : answer.path("flags")) {
 			if (flag.asString().equals("expired_registration")) session.registration = "expired";
 		}
@@ -249,6 +277,11 @@ public class TmbgBookingAssistant {
 
 	private JsonNode mockAnswer(Session session, String text, Map<String, Object> fields) {
 		String normalized = text.toLowerCase(Locale.ROOT);
+		String topic = knowledge.mockTopic(text);
+		if (!topic.isEmpty() || session.stage.equals("CONFIRMED")) {
+			return json.valueToTree(Map.of("lang", session.language, "knowledge_topic", topic,
+					"outcome", session.stage.equals("CONFIRMED") && knowledge.bookingChange(text) ? "booking_change" : "unavailable"));
+		}
 		String template;
 		String stage = session.stage;
 		String code = chosenSlot(session, text);
@@ -375,6 +408,7 @@ public class TmbgBookingAssistant {
 	}
 
 	private String fallback(Session session, Map<String, Object> fields) {
+		if (session.stage.equals("CONFIRMED")) return chatUnavailable(session);
 		if (session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
 		if (session.stage.equals("SLOTS_OFFERED")) {
 			String options = String.join("; ", session.slots.entrySet().stream().map(entry -> entry.getKey() + "=" + label(entry.getValue())).toList());
@@ -412,6 +446,18 @@ public class TmbgBookingAssistant {
 	private String fullEnglish(String text) {
 		return text.replaceAll("(?i)\\b(?:po|opo)\\b", "")
 				.replaceAll(" +([,.!?])", "$1").replaceAll(" {2,}", " ").trim();
+	}
+
+	private String bookingChangesUnavailable(Session session) {
+		return session.language.equals("tl")
+				? "Hindi po maaaring baguhin o i-cancel ang booking sa chat sa ngayon. Kontakin po ang Toyota Manila Bay nang direkta para sa tulong."
+				: "Bookings cannot be changed or cancelled through this chat at this time. Please contact Toyota Manila Bay directly for help.";
+	}
+
+	private String chatUnavailable(Session session) {
+		return session.language.equals("tl")
+				? "General service questions lang po ang kayang sagutin ng chat sa ngayon. Para sa ibang tulong, kontakin po ang Toyota Manila Bay nang direkta."
+				: "This chat can only answer general service questions right now. Please contact Toyota Manila Bay directly for further help.";
 	}
 
 	private boolean validSms(String text) {

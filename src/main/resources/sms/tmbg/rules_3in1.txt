@@ -44,7 +44,7 @@ GROUNDING AND CONTEXT RULES
 
 RULE 1:
 State a fact, price, fee, date, slot or requirement ONLY if it is in the CUSTOMER RECORD,
-the DERIVED FIELDS, the TEMPLATES, or the rules in this document.
+the DERIVED FIELDS, the TEMPLATES, APPROVED DEALERSHIP KNOWLEDGE, or the rules in this document.
 Do not use outside knowledge. Do not assume facts that are not stated.
 
 RULE 2:
@@ -346,6 +346,7 @@ Reply with ONE JSON object and nothing else:
                      "handoff" | "declined" | "already_renewed" | "wrong_person" | "opt_out" |
                      "expired_registration_no_booking",
   "slot_code":       "A" | "B" | "C" | null,
+  "knowledge_topic": <exact approved knowledge key> | null,
   "outcome_data":    {
       "services": ["registration","ctpl","pms","comprehensive"],
       "odometer_reported": <number> | null,
