@@ -53,7 +53,7 @@ public class TmbgBookingAssistant {
 		A saved booking ends booking operations, but general dealership questions remain available.
 		Short social replies are allowed at every stage. Greet naturally, thank briefly and acknowledge the customer's words before returning to the current question.
 		The service handles recognized leading greetings, thanks and wellbeing questions; do not repeat them when the latest message contains only the remaining request.
-		Greetings, gratitude and small talk are never service acceptance, refusal or date selection. Do not restart offers or push a sales question after a simple thank-you.
+		Greetings, gratitude and small talk are never service acceptance, refusal or date selection. Pair social-only replies with a relevant next step: resume the current question after a greeting, invite confirmed customers to visit, and invite further car questions after thanks or a completed conversation. Never restart completed offers.
 		Already-renewed customers may continue with maintenance or insurance. Never default to registration or add unaccepted services.
 		No callbacks, pickups, quote delivery or human transfers are implemented. Do not promise those actions.
 		For a person, callback or unavailable action, politely ask the customer to contact Toyota Manila Bay directly. Do not follow that with another sales question.
@@ -208,6 +208,7 @@ public class TmbgBookingAssistant {
 		String end = "(?=$|[\\s,.!?;:])[,!?.;:\\s]*";
 		patterns.put("GREETING_ACK", Pattern.compile("(?i)^(?:(?:hi|hello|hey)(?: there)?|good (?:morning|afternoon|evening|day)|magandang (?:umaga|hapon|gabi))(?: po)?" + end));
 		patterns.put("THANKS_ACK", Pattern.compile("(?i)^(?:thanks(?: a lot| so much)?|thank you(?: so much)?|(?:maraming )?salamat)(?: po)?(?: (?:for (?:your help|the help|explaining|the information)|sa (?:tulong|info)))?" + end));
+		patterns.put("COURTESY_ACK", Pattern.compile("(?i)^(?:you(?:'|\u2019)?re welcome|you are welcome|walang anuman)(?: po)?" + end));
 		patterns.put("WELLBEING_ACK", Pattern.compile("(?i)^(?:how are you(?: doing)?(?: today)?|(?:kumusta|kamusta)(?: po)?(?: (?:ka|kayo))?)(?: po)?(?=$|[,.!?;:])[,!?.;:\\s]*"));
 		return patterns;
 	}
@@ -232,8 +233,11 @@ public class TmbgBookingAssistant {
 	}
 
 	private String conversationalFollowup(Session session, ConversationalMessage message, Map<String, Object> fields) {
-		if (message.templateIds().stream().allMatch("THANKS_ACK"::equals)
-				|| Set.of("CONFIRMED", "COMPLETED_NO_BOOKING").contains(session.stage)) return "";
+		if (session.stage.equals("CONFIRMED")) return render("VISIT_INVITATION", session, fields);
+		if (session.stage.equals("COMPLETED_NO_BOOKING")
+				|| message.templateIds().stream().allMatch(id -> Set.of("THANKS_ACK", "COURTESY_ACK").contains(id))) {
+			return render("FURTHER_HELP_INVITATION", session, fields);
+		}
 		if (session.focus != null && !session.stage.equals("REG_STATUS_ASKED")) return render("RESUME_SERVICE_OFFER", session, fields);
 		return fallback(session, fields);
 	}

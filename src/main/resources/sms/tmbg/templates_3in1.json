@@ -21,10 +21,34 @@
     {
       "id": "THANKS_ACK",
       "scenario": "Reply briefly to thanks",
-      "when": "The service acknowledges thanks or salamat. A thank-you alone gets only this reply and preserves the current question.",
+      "when": "The service acknowledges thanks or salamat, followed by a visit invitation after confirmation or an invitation to ask for car help. Preserve the current question.",
       "used_by": "service",
       "en": "You're welcome!",
       "tl": "Walang anuman po!"
+    },
+    {
+      "id": "COURTESY_ACK",
+      "scenario": "Acknowledge you are welcome",
+      "when": "The service acknowledges a customer's courtesy before the relevant next step.",
+      "used_by": "service",
+      "en": "Thank you!",
+      "tl": "Salamat po!"
+    },
+    {
+      "id": "VISIT_INVITATION",
+      "scenario": "Close a social reply after a saved booking",
+      "when": "Invite the customer to visit without changing the saved request or promising a live reservation.",
+      "used_by": "service",
+      "en": "We hope to see you at Toyota Manila Bay soon! Message us if you have any car service questions.",
+      "tl": "Sana po ay makita namin kayo sa Toyota Manila Bay soon! Mag-message lang po kung may tanong kayo tungkol sa serbisyo ng sasakyan."
+    },
+    {
+      "id": "FURTHER_HELP_INVITATION",
+      "scenario": "Invite further car service questions",
+      "when": "Follow thanks or a completed conversation with an invitation for help, without restarting service offers.",
+      "used_by": "service",
+      "en": "Message us anytime if you need help or have questions about your car's services.",
+      "tl": "Mag-message lang po kung kailangan ninyo ng tulong o may tanong tungkol sa serbisyo ng sasakyan ninyo."
     },
     {
       "id": "WELLBEING_ACK",
