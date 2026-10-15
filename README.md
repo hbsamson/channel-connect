@@ -2,13 +2,13 @@
 
 A Java 25 Spring Boot application for Messenger and WhatsApp, with one entry point: `com.svi.channelconnect.ChannelConnectApplication`.
 
-SMS is available through an independent provider boundary, the documented GoIP UDP protocol, a direct GoIP8 HTTP web form, and a hosted PHP HTTP API matching the operator's Postman send/receive collection. It is disabled by default; explicit mock mode uses an actual loopback UDP gateway simulator. See [GoIP SMS setup, protocol details, local API examples, and hardware cutover prerequisites](docs/goip-sms.md). Physical GoIP operation from this application has not been verified.
+SMS is available through an independent provider boundary, the documented GoIP UDP protocol, a direct GoIP8 HTTP web form, and a hosted PHP HTTP API matching the operator's Postman send/receive collection. It is disabled by default; explicit mock mode uses an actual loopback UDP gateway simulator. See [GoIP SMS setup, protocol details, local API examples, and hardware cutover prerequisites](docs/goip-sms.md), or start the supplied [TMBG 3-in-1 SMS demo](docs/tmbg-sms-demo.md) using the existing SMS configuration. Physical GoIP operation from this application has not been verified.
 
 ## Architecture
 
 Connectors live under `com.svi.channelconnect.messenger` and `com.svi.channelconnect.whatsapp`. AI adapters live under `ai` and shared messaging contracts under `common`.
 
-The SMS connector lives under `sms`, with a persistent inbox/outbox, bounded workers, scoped conversations, and explicit queued, gateway-reported, failed, and unknown statuses. It reuses the existing dealership assistant and AI boundary. An unknown transmission is blocked from automatic resend.
+The SMS connector lives under `sms`, with a persistent inbox/outbox, bounded workers, scoped conversations, and explicit queued, gateway-reported, failed, and unknown statuses. Ordinary SMS conversations reuse the existing dealership assistant and AI boundary. The TMBG demo participant uses the supplied instructions and isolated demo state. An unknown transmission is blocked from automatic resend.
 
 SMS supports bearer-protected `/api/v1/sms/send`, cursor-based `/api/v1/sms/receive` polling, and `/api/v1/sms/receive-all` for paging through retained inbox history across configured SIMs. It also supports canned `script1`/`script3` bulk campaign openings and retained conversation context for appointment and service/price-objection replies. The `sms-http-api` profile uses the hosted Postman contract with continuous JSON inbox polling; direct HTTP sending can also opt into authenticated UDP reception. See [the conversation flow, bulk request, and receive configuration](docs/goip-sms.md). Booking uses configured slots; live scheduling and Redshift synchronization are not connected.
 

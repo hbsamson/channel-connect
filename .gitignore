@@ -38,3 +38,4 @@ build/
 !.env.example
 data/
 logs/
+bookings.txt

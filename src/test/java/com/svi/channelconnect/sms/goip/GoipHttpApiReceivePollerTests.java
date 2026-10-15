@@ -25,6 +25,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -34,6 +35,7 @@ import com.svi.channelconnect.dealership.persistence.DealershipRepository;
 import com.svi.channelconnect.sms.config.GoipHttpApiProperties;
 import com.svi.channelconnect.sms.exception.SmsException;
 import com.svi.channelconnect.sms.persistence.SmsMessageRepository;
+import com.svi.channelconnect.sms.service.SmsTmbgDemoService;
 import com.svi.channelconnect.sms.service.SmsValidation;
 import com.svi.channelconnect.support.SmsTestProperties;
 
@@ -44,12 +46,16 @@ class GoipHttpApiReceivePollerTests {
 	private final GoipHttpApiClient client = mock(GoipHttpApiClient.class);
 	private final SmsMessageRepository messages = mock(SmsMessageRepository.class);
 	private final DealershipRepository customers = mock(DealershipRepository.class);
+	private final SmsTmbgDemoService demo = mock(SmsTmbgDemoService.class);
+	@SuppressWarnings("unchecked")
+	private final ObjectProvider<SmsTmbgDemoService> demos = mock(ObjectProvider.class);
 	private final SimpleMeterRegistry metrics = new SimpleMeterRegistry();
 	private final GoipHttpApiProperties api = api("synthetic-receive-key", null);
 	private GoipHttpApiReceivePoller poller;
 
 	@BeforeEach
 	void setup() {
+		when(demos.getIfAvailable()).thenReturn(demo);
 		when(messages.receiveBaseline(anyString(), anyLong())).thenAnswer(invocation -> invocation.getArgument(1));
 		when(messages.acceptRemote(anyString(), anyLong(), anyString(), anyString(), anyLong())).thenReturn(true);
 		when(customers.identity(eq("SMS"), anyString(), eq(CUSTOMER_PHONE))).thenAnswer(invocation -> Optional.of(
@@ -121,11 +127,29 @@ class GoipHttpApiReceivePollerTests {
 	}
 
 	@Test
+	void processesOnlyTheLatestDemoReplyPerSimWithoutRequiringACustomerLink() throws Exception {
+		String demoPhone = "+639170000011";
+		when(demo.accepts("sim-1", demoPhone)).thenReturn(true);
+		when(demo.accepts("sim-2", demoPhone)).thenReturn(true);
+		when(client.receive()).thenReturn(response(
+				entry(1, 1, demoPhone, "Older demo reply", NOW.plusSeconds(1)),
+				entry(2, 2, demoPhone, "Other SIM reply", NOW.plusSeconds(2)),
+				entry(3, 1, demoPhone, "Latest demo reply", NOW.plusSeconds(3))));
+
+		poller.poll();
+
+		verify(messages).archiveRemote("sim-1", 1, demoPhone, "Older demo reply", NOW.plusSeconds(1).toEpochMilli());
+		verify(messages).acceptRemote("sim-2", 2, demoPhone, "Other SIM reply", NOW.plusSeconds(2).toEpochMilli());
+		verify(messages).acceptRemote("sim-1", 3, demoPhone, "Latest demo reply", NOW.plusSeconds(3).toEpochMilli());
+		verify(customers, never()).identity(eq("SMS"), anyString(), eq(demoPhone));
+	}
+
+	@Test
 	void defaultBaselineKeepsReceiptsFromTheGatewayStartupSecond() throws Exception {
 		poller.close();
 		poller = new GoipHttpApiReceivePoller(client, api, SmsTestProperties.properties(Map.of(
 				"sms.mode", "HTTP_API", "sms.live-authorized", "true")), messages, customers, json, metrics,
-				Clock.fixed(NOW.plusMillis(800), ZoneOffset.UTC));
+				Clock.fixed(NOW.plusMillis(800), ZoneOffset.UTC), demos);
 		poller.start();
 		when(client.receive()).thenReturn(response(entry(1, 1, CUSTOMER_PHONE, "Same-second reply", NOW)));
 		poller.poll();
@@ -192,7 +216,7 @@ class GoipHttpApiReceivePollerTests {
 	private GoipHttpApiReceivePoller poller(GoipHttpApiProperties settings) {
 		return new GoipHttpApiReceivePoller(client, settings, SmsTestProperties.properties(Map.of(
 				"sms.mode", "HTTP_API", "sms.live-authorized", "true")), messages, customers, json, metrics,
-				Clock.fixed(NOW, ZoneOffset.UTC));
+				Clock.fixed(NOW, ZoneOffset.UTC), demos);
 	}
 	private static GoipHttpApiProperties api(String key, Instant startAt) {
 		return new GoipHttpApiProperties(URI.create("https://example.invalid/send"), URI.create("https://example.invalid/receive"),

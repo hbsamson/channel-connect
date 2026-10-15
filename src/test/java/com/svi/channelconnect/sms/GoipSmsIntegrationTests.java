@@ -35,6 +35,7 @@ import com.svi.channelconnect.messenger.client.MessengerSendClient;
 @SpringBootTest(properties = {
 		"spring.datasource.url=jdbc:h2:mem:smsintegration;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
 		"sms.enabled=true", "sms.mode=MOCK", "sms.api-token=test-sms-api-token",
+		"sms.max-segments=2",
 		"sms.packet-timeout=500ms", "sms.poll-interval=200ms", "sms.max-polls=2", "sms.session-timeout=4s", "sms.shutdown-timeout=2s",
 		"sms.processing-attempts=2", "sms.processing-retry-delay=10ms", "sms.dispatch-delay-ms=600000", "sms.maintenance-delay-ms=600000",
 		"sms.channels[0].account-id=sim-1", "sms.channels[0].device-id=test-device", "sms.channels[0].sim-channel=1",
@@ -196,6 +197,37 @@ class GoipSmsIntegrationTests {
 				.contentType("application/json").content(request)).andExpect(status().isAccepted()).andExpect(jsonPath("$.status").value("QUEUED"));
 		verifyNoInteractions(ai);
 		await(() -> messages.outboundBacklog() == 0, true);
+	}
+	@Test void startsTmbgDemoWithTheFictionalCustomerAndRoutesRepliesWithoutAnIdentityLink() throws Exception {
+		String request = "{\"accountId\":\"sim-1\"}";
+		mvc.perform(post("/api/v1/sms/campaign/start").contentType("application/json").content(request))
+				.andExpect(status().isUnauthorized());
+		mvc.perform(post("/api/v1/sms/campaign/start").header("Authorization", "Bearer test-sms-api-token")
+				.contentType("application/json").content("{\"accountId\":\"\"}"))
+				.andExpect(status().isBadRequest());
+		var response = mvc.perform(post("/api/v1/sms/campaign/start").header("Authorization", "Bearer test-sms-api-token")
+				.contentType("application/json").content(request)).andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.status").value("QUEUED")).andExpect(header().exists("Location")).andReturn();
+		String id = new tools.jackson.databind.ObjectMapper().readTree(response.getResponse().getContentAsString()).path("messageId").asString();
+		var greeting = messages.outbound(id).orElseThrow();
+		assertThat(greeting.recipient()).isEqualTo("+639170000011");
+		assertThat(greeting.content()).contains("Amelia", "AI assistant", "STOP");
+		verifyNoInteractions(ai);
+		awaitStatus(id, "GATEWAY_SENT");
+
+		when(ai.generateResponse(any())).thenReturn(new AiResponse("""
+				{"reply_text":"Has your registration been renewed this year po?","template_id":"REG_STATUS_ASK",\
+				"lang":"en","short_code_read":null,"state_after":"REG_STATUS_ASKED","outcome":null,\
+				"slot_code":null,"outcome_data":{"services":[],"odometer_reported":null,\
+				"decline_reason":null,"callback_time":null},"needs_human":false,"flags":[]}
+				"""));
+		provider.simulator().inbound("sim-1", 200050, "+639170000011", "Hello").get(5, TimeUnit.SECONDS);
+		await(() -> count("sms_inbox", "receive_id = 200050 AND status = 'PROCESSED'") == 1 && messages.outboundBacklog() == 0, true);
+		assertThat(db.sql("SELECT content FROM sms_outbox WHERE request_key LIKE 'reply:%'").query(String.class).single())
+				.isEqualTo("Has your registration been renewed this year po?");
+		var prompt = org.mockito.ArgumentCaptor.forClass(com.svi.channelconnect.ai.dto.AiRequest.class);
+		verify(ai).generateResponse(prompt.capture());
+		assertThat(prompt.getValue().message()).contains("CUSTOMER RECORD", "Amelia", "CONVERSATION STATE", "CUSTOMER SMS");
 	}
 	@Test void exposesWholeInboxSeparatelyFromPolling() throws Exception {
 		mvc.perform(get("/api/v1/sms/receive-all")).andExpect(status().isUnauthorized());

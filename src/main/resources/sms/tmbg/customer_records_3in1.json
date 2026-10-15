@@ -1,0 +1,50 @@
+{
+  "_note": "Invented demo data. Phones use the +639170000xxx test range. All enrichment values are null or demo; nothing here is a real price, fee or rate.",
+  "records": [
+    {
+      "payload_id": "pl_3in1_0001",
+      "campaign_id": "3IN1",
+      "script_id": "S3",
+      "segment": "reaching_third_anniversary",
+      "reg_segment_band": "1 opens within 7 days",
+      "list_id": "TMBG-3IN1-DEMO",
+      "build_tag": "v5",
+      "as_of": "2026-10-14",
+      "customer_id": "CUS-DEMO-0001",
+      "first_name": "Amelia",
+      "full_name": "Amelia Reyes",
+      "phone": "+639170000011",
+      "email": null,
+      "vin": "DEMOVIN0000000001",
+      "plate": "TST 3080",
+      "model_description": "Vios 1.3 XLE CVT",
+      "reg_base_date": "2023-10-20",
+      "service_state": "due_soon",
+      "last_pms_date": "2026-04-20",
+      "last_pms_odometer": 29800,
+      "next_pms_due": null,
+      "comp_status": "active",
+      "comp_expiry_date": "2026-12-01",
+      "reg_window_start": "2026-10-15",
+      "reg_window_end": "2026-10-21",
+      "enrichment": {
+        "pms_milestone_km": 30000,
+        "pms_price": null,
+        "reg_service_fee": null,
+        "mvuc_fee": null,
+        "reg_service_mode": null,
+        "petc_accredited": null,
+        "collection_available": false,
+        "collection_note": null,
+        "branch": "DEMO-BRANCH-1",
+        "branch_name": "Toyota Manila Bay Demo Branch",
+        "slots": [
+          "2026-10-16T09:00",
+          "2026-10-19T13:00",
+          "2026-10-20T10:00"
+        ],
+        "demo": true
+      }
+    }
+  ]
+}

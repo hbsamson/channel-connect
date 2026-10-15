@@ -2,6 +2,8 @@
 
 This is a simulator-tested local integration. The physical VoiceLink GoIPx8, firmware `GST1610-1.01-70-18`, has not been contacted or reconfigured. Its existing SMS server remains outside this application's control. Enabling a listener does not redirect gateway traffic to it.
 
+For the supplied [TMBG 3-in-1 SMS demo](tmbg-sms-demo.md), keep the existing SMS profile and `.env` and call `POST /api/v1/sms/campaign/start`. The demo participant uses its own instructions and process-local state, replacing the shared conversation flow described below for that participant only. Its hosted inbox path accepts the latest fresh reply without legacy customer identity linking, and the service writes demo bookings to `bookings.txt`.
+
 ## Architecture and durability
 
 ### Choosing application configuration

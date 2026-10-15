@@ -9,7 +9,9 @@ import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +21,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -33,6 +36,7 @@ import com.svi.channelconnect.sms.config.GoipHttpApiProperties;
 import com.svi.channelconnect.sms.config.SmsProperties;
 import com.svi.channelconnect.sms.exception.SmsException;
 import com.svi.channelconnect.sms.persistence.SmsMessageRepository;
+import com.svi.channelconnect.sms.service.SmsTmbgDemoService;
 import com.svi.channelconnect.sms.service.SmsValidation;
 
 /** Retains the hosted inbox; only eligible fresh customer replies enter conversation processing. */
@@ -50,13 +54,15 @@ public class GoipHttpApiReceivePoller {
 	private final ObjectMapper json;
 	private final MeterRegistry metrics;
 	private final Clock clock;
+	private final ObjectProvider<SmsTmbgDemoService> demos;
 	private final ThreadPoolExecutor worker;
 	private final AtomicBoolean running = new AtomicBoolean();
 	private volatile boolean ready;
 	private volatile long receivedFrom;
 
 	public GoipHttpApiReceivePoller(GoipHttpApiClient client, GoipHttpApiProperties api, SmsProperties sms,
-			SmsMessageRepository messages, DealershipRepository customers, ObjectMapper json, MeterRegistry metrics, Clock clock) {
+			SmsMessageRepository messages, DealershipRepository customers, ObjectMapper json, MeterRegistry metrics, Clock clock,
+			ObjectProvider<SmsTmbgDemoService> demos) {
 		if (api.receiveUrl() == null) throw new IllegalArgumentException("SMS HTTP API polling requires a receive URL");
 		this.client = client;
 		this.api = api;
@@ -66,6 +72,7 @@ public class GoipHttpApiReceivePoller {
 		this.json = json;
 		this.metrics = metrics;
 		this.clock = clock;
+		this.demos = demos;
 		worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(1), task -> {
 			Thread thread = new Thread(task, "sms-http-api-receive");
 			thread.setDaemon(true);
@@ -104,9 +111,18 @@ public class GoipHttpApiReceivePoller {
 			}
 			List<RemoteMessage> received = snapshot(response.body());
 			received.sort(Comparator.comparing(RemoteMessage::receivedAt).thenComparingLong(RemoteMessage::receiveId));
+			SmsTmbgDemoService demo = demos.getIfAvailable();
+			Map<DemoParticipant, RemoteMessage> latest = new HashMap<>();
+			for (RemoteMessage message : received) {
+				if (demo != null && message.processReply() && demo.accepts(message.accountId(), message.sender())) {
+					latest.put(new DemoParticipant(message.accountId(), message.sender()), message);
+				}
+			}
 			for (RemoteMessage message : received) {
 				try {
-					boolean accepted = message.processReply()
+					RemoteMessage selected = latest.get(new DemoParticipant(message.accountId(), message.sender()));
+					boolean processReply = message.processReply() && (selected == null || selected.equals(message));
+					boolean accepted = processReply
 							? messages.acceptRemote(message.accountId(), message.receiveId(), message.sender(), message.content(), message.receivedAt().toEpochMilli())
 							: messages.archiveRemote(message.accountId(), message.receiveId(), message.sender(), message.content(), message.receivedAt().toEpochMilli());
 					result(accepted ? "accepted" : "duplicate");
@@ -173,8 +189,12 @@ public class GoipHttpApiReceivePoller {
 		}
 		boolean processReply = false;
 		if (fresh && phone) {
-			var identity = customers.identity("SMS", route.accountId(), sender).orElse(null);
-			processReply = identity != null && identity.verified() && identity.consent() && identity.outboundAllowed();
+			SmsTmbgDemoService demo = demos.getIfAvailable();
+			processReply = demo != null && demo.accepts(route.accountId(), sender);
+			if (!processReply) {
+				var identity = customers.identity("SMS", route.accountId(), sender).orElse(null);
+				processReply = identity != null && identity.verified() && identity.consent() && identity.outboundAllowed();
+			}
 		}
 		long receiveId = Long.parseLong(text(entry, "recvid"));
 		if (receiveId < 1) throw new IllegalArgumentException("Invalid SMS receive ID");
@@ -203,6 +223,7 @@ public class GoipHttpApiReceivePoller {
 		worker.shutdownNow();
 	}
 
+	private record DemoParticipant(String accountId, String sender) { }
 	private record RemoteMessage(String accountId, long receiveId, String sender, String content, Instant receivedAt, boolean processReply) {
 		@Override public String toString() { return "RemoteSms[payload=<redacted>]"; }
 	}

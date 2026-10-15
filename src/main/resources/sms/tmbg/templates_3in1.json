@@ -1,0 +1,256 @@
+{
+  "_note": "Placeholders in double braces are filled by the service from the customer record and derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL).",
+  "version": "v3",
+  "templates": [
+    {
+      "id": "OPEN_GREETING",
+      "scenario": "First outbound SMS (greeting)",
+      "when": "Sent by the campaign sender, once. Says who we are and what it is about, gives the opt-out, and asks permission to ask. No dates, fees or questions about the car yet.",
+      "used_by": "campaign_sender",
+      "en": "Hi po {{first_name}}! AI assistant of Toyota Manila Bay here, about your {{model_or_plate}}. May I ask a quick question? STOP to opt out.",
+      "tl": "Hello po, {{first_name}}! AI assistant po ng Toyota Manila Bay, tungkol sa {{model_or_plate}} ninyo. May itatanong lang po. STOP para mag-opt out."
+    },
+    {
+      "id": "REG_STATUS_ASK",
+      "scenario": "Registration question",
+      "when": "Owner replied to the greeting (hello, yes, sige) without answering anything yet. This is the first question.",
+      "used_by": "assistant",
+      "en": "Thank you po! Has your registration been renewed this year? Just tell us, or reply 1=Yes 2=Not yet 3=Not sure.",
+      "tl": "Salamat po! Na-renew na po ba ang registration ninyo ngayong taon? Sabihin lang po, o reply 1=Oo 2=Hindi pa 3=Hindi sigurado."
+    },
+    {
+      "id": "ID_WRONG_PERSON",
+      "scenario": "Not the named owner",
+      "when": "Owner says they are not the named person.",
+      "used_by": "assistant",
+      "en": "Sorry po for the trouble. Do you know how we can reach {{first_name}}? If not, we will remove this number from our list.",
+      "tl": "Pasensya na po sa abala. May alam po ba kayong paraan para maabot si {{first_name}}? Kung wala, aalisin na po namin ang number na ito sa listahan."
+    },
+    {
+      "id": "REG_ALREADY_RENEWED",
+      "scenario": "Registration already renewed",
+      "when": "Owner answered 1 (renewed). Do not re-pitch registration.",
+      "used_by": "assistant",
+      "en": "Thank you po! Would you like us to check the PMS or insurance of your {{model_or_plate}} instead?",
+      "tl": "Salamat po! Gusto po ba ninyong i-check namin ang PMS o insurance ng {{model_or_plate}} ninyo?"
+    },
+    {
+      "id": "OFFER_WINDOW_UPCOMING",
+      "scenario": "Offer, window not open yet",
+      "when": "Owner answered 2 (not yet) and window_status is upcoming.",
+      "used_by": "assistant",
+      "en": "Thanks po. Your registration window is {{reg_window_start}} to {{reg_window_end}}. We can do registration, CTPL and PMS in one visit at {{branch_name}}. Would you like to book?",
+      "tl": "Salamat po. Ang registration window ninyo ay {{reg_window_start}} hanggang {{reg_window_end}}. Pwede po naming gawin ang registration, CTPL at PMS sa isang visit sa {{branch_name}}. Gusto po ba ninyong mag-book?"
+    },
+    {
+      "id": "OFFER_WINDOW_OPEN",
+      "scenario": "Offer, window open now",
+      "when": "Owner answered 2 (not yet) and window_status is open.",
+      "used_by": "assistant",
+      "en": "Thanks po. Your registration window is open now until {{reg_window_end}}. We can do registration, CTPL and PMS in one visit at {{branch_name}}. Would you like to book?",
+      "tl": "Salamat po. Bukas na po ang registration window ninyo hanggang {{reg_window_end}}. Pwede po naming gawin ang registration, CTPL at PMS sa isang visit sa {{branch_name}}. Gusto po ba ninyong mag-book?"
+    },
+    {
+      "id": "SLOTS_OFFER",
+      "scenario": "Offer appointment slots",
+      "when": "Owner accepted. Only slots inside the registration window are ever offered.",
+      "used_by": "assistant",
+      "en": "Slots at {{branch_name}}: {{slots_text}}. Reply {{slot_codes}}. Need other dates? Reply AGENT.",
+      "tl": "Mga slot po sa {{branch_name}}: {{slots_text}}. Reply {{slot_codes}}. Iba pong petsa? Reply AGENT.",
+      "fallback_en": "Our advisor will message you shortly with available dates. Reply AGENT to talk to a person now.",
+      "fallback_tl": "Magme-message po ang advisor namin para sa available na petsa. Reply AGENT kung gusto ninyong makausap ang tao ngayon."
+    },
+    {
+      "id": "ODOMETER_ASK",
+      "scenario": "Ask odometer",
+      "when": "Before quoting the PMS.",
+      "used_by": "assistant",
+      "en": "To quote the right PMS, what is your car's current odometer reading in km?",
+      "tl": "Para makapag-quote po ng tamang PMS, ilan po ang odometer reading ng sasakyan ninyo (km)?"
+    },
+    {
+      "id": "PMS_QUOTE",
+      "scenario": "Quote PMS",
+      "when": "After the odometer. Estimate only.",
+      "used_by": "assistant",
+      "en": "At {{pms_milestone_km}} km, your PMS is estimated at {{pms_price}}. The advisor will confirm the final amount.",
+      "tl": "Sa {{pms_milestone_km}} km po, ang PMS ay tinatayang {{pms_price}}. Kukumpirmahin po ng advisor ang final na halaga.",
+      "fallback_en": "I'll have the advisor confirm the exact PMS amount for your odometer reading.",
+      "fallback_tl": "Ipakukumpirma ko po sa advisor ang eksaktong halaga ng PMS para sa odometer ninyo."
+    },
+    {
+      "id": "FEES",
+      "scenario": "Registration fees",
+      "when": "Owner asks what it costs.",
+      "used_by": "assistant",
+      "en": "Registration service fee is {{reg_service_fee}} plus LTO charges at actual. I'll give the exact LTO total at the branch.",
+      "tl": "Ang registration service fee po ay {{reg_service_fee}} plus LTO charges at actual. Ibibigay ko po ang eksaktong LTO total sa branch.",
+      "fallback_en": "The advisor will confirm the registration service fee and the LTO charges. LTO charges are fixed by law.",
+      "fallback_tl": "Kukumpirmahin po ng advisor ang registration service fee at LTO charges. Fixed po by law ang LTO charges."
+    },
+    {
+      "id": "CTPL_INFO",
+      "scenario": "CTPL",
+      "when": "Owner asks whether CTPL is needed.",
+      "used_by": "assistant",
+      "en": "CTPL needs to be renewed together with the registration. It can't be dropped if the registration goes ahead.",
+      "tl": "Kailangan po i-renew ang CTPL kasabay ng registration. Hindi po ito pwedeng alisin kung tuloy ang registration."
+    },
+    {
+      "id": "COMP_ASK",
+      "scenario": "Comprehensive insurance",
+      "when": "Optional third leg.",
+      "used_by": "assistant",
+      "en": "Is your comprehensive insurance still active? If not, we can offer renewal, subject to the insurer's approval.",
+      "tl": "Active pa po ba ang comprehensive insurance ninyo? Kung hindi, pwede po naming i-offer ang renewal, subject sa approval ng insurer."
+    },
+    {
+      "id": "EMISSION",
+      "scenario": "Emission testing",
+      "when": "Owner asks who does the emission test.",
+      "used_by": "assistant",
+      "en": "Emission testing is done at an LTO-accredited center. Your advisor will tell you which one.",
+      "tl": "Ang emission testing po ay sa LTO-accredited center. Sasabihin po ng advisor kung saan."
+    },
+    {
+      "id": "BANK_LOAN_ASK",
+      "scenario": "Bank-held CR",
+      "when": "Ask before the documents list.",
+      "used_by": "assistant",
+      "en": "Is the car under a bank loan?",
+      "tl": "Naka-loan po ba sa bangko ang sasakyan?"
+    },
+    {
+      "id": "BANK_LOAN_YES",
+      "scenario": "Bank-held CR",
+      "when": "Owner says the car is under a bank loan.",
+      "used_by": "assistant",
+      "en": "Thanks po. I'll confirm with the LTO what is accepted for the CR, and let you know before your visit.",
+      "tl": "Salamat po. Kukumpirmahin ko po sa LTO kung ano ang tinatanggap para sa CR, at ipapaalam ko bago ang visit ninyo."
+    },
+    {
+      "id": "DOCUMENTS",
+      "scenario": "Documents to bring",
+      "when": "After a slot is chosen.",
+      "used_by": "assistant",
+      "en": "Please bring your OR/CR and a valid ID. If someone else will bring the car, we can send an authorization letter to e-sign.",
+      "tl": "Dalhin po ang OR/CR at valid ID. Kung ibang tao ang magdadala ng sasakyan, pwede po naming ipadala ang authorization letter na pwedeng i-e-sign."
+    },
+    {
+      "id": "DISCOUNT_ASK",
+      "scenario": "Owner asks for a discount",
+      "when": "",
+      "used_by": "assistant",
+      "en": "LTO charges are fixed by law po, so there's no discount on them. Ask the advisor about current service promos.",
+      "tl": "Fixed po by law ang LTO charges kaya walang discount dito. Itanong po sa advisor ang mga kasalukuyang service promo."
+    },
+    {
+      "id": "TOO_EXPENSIVE",
+      "scenario": "Price objection",
+      "when": "",
+      "used_by": "assistant",
+      "en": "Understood po. Card installment is available at the cashier. We can also book just the PMS and decide on the rest with the advisor. Shall I book it?",
+      "tl": "Naiintindihan ko po. May card installment po sa cashier. Pwede rin pong PMS lang muna ang i-book at pag-usapan sa advisor ang iba. Ibu-book ko na po ba?"
+    },
+    {
+      "id": "BOOKING_CONFIRMED",
+      "scenario": "Booking confirmed (sent by the service)",
+      "when": "The SERVICE sends this after the booking is written. The model never writes it.",
+      "used_by": "service",
+      "en": "Confirmed po! {{services_list}} on {{slot_selected}} at {{branch_name}} for {{plate}}. Ref {{booking_ref}}. Bring your OR/CR and a valid ID. To change it, reply AGENT.",
+      "tl": "Confirmed po! {{services_list}} sa {{slot_selected}} sa {{branch_name}} para sa {{plate}}. Ref {{booking_ref}}. Dalhin ang OR/CR at valid ID. Para magpalit, reply AGENT."
+    },
+    {
+      "id": "SLOT_TAKEN",
+      "scenario": "Chosen slot no longer free (sent by the service)",
+      "when": "The SERVICE sends this when the slot is taken or no longer valid.",
+      "used_by": "service",
+      "en": "Sorry po, that slot was just taken. Available now: {{slots_text}}. Reply {{slot_codes}}.",
+      "tl": "Pasensya na po, kakakuha lang ng slot na iyon. Available ngayon: {{slots_text}}. Reply {{slot_codes}}.",
+      "fallback_en": "Sorry po, that slot was just taken and no other slot is open right now. An advisor will message you with new dates.",
+      "fallback_tl": "Pasensya na po, kakakuha lang ng slot na iyon at wala nang ibang bukas ngayon. Magme-message po ang advisor namin para sa bagong petsa."
+    },
+    {
+      "id": "BOOKING_ERROR",
+      "scenario": "Booking could not be saved (sent by the service)",
+      "when": "The SERVICE sends this if the booking store fails. Nothing is confirmed.",
+      "used_by": "service",
+      "en": "Sorry po, we couldn't save your booking just now. An advisor will message you shortly to finish it.",
+      "tl": "Pasensya na po, hindi namin nai-save ang booking ninyo ngayon. Magme-message po ang advisor namin para tapusin ito."
+    },
+    {
+      "id": "EXPIRED_COLLECTION",
+      "scenario": "Registration expired, pickup available (G-REG-01)",
+      "when": "Owner says the window has passed or the registration has expired, and collection_available is true.",
+      "used_by": "assistant",
+      "en": "Thanks for telling me po. I can't book you to drive in. We can arrange a pickup for your {{model_or_plate}}. {{collection_note}} Would you like us to arrange it?",
+      "tl": "Salamat po sa pagsabi. Hindi po ako makakapag-book na i-drive ang sasakyan. Pwede po kaming mag-arrange ng pickup para sa {{model_or_plate}}. {{collection_note}} Gusto po ba ninyong i-arrange namin?",
+      "fallback_en": "Thanks for telling me po. An unregistered car should not be driven, so I can't book a drive-in visit. An advisor will guide you on settling the registration first. Shall I have them contact you?",
+      "fallback_tl": "Salamat po sa pagsabi. Hindi po dapat i-drive ang sasakyang expired ang registration kaya hindi ako makakapag-book ng drive-in. Gagabayan po kayo ng advisor sa pag-asikaso muna ng registration. Ipa-contact ko po ba sila sa inyo?"
+    },
+    {
+      "id": "EXPIRED_NO_COLLECTION",
+      "scenario": "Registration expired, no pickup (G-REG-01)",
+      "when": "Owner says the window has passed or the registration has expired, and collection_available is not true.",
+      "used_by": "assistant",
+      "en": "Thanks for telling me po. An unregistered car should not be driven, so I can't book a drive-in visit. An advisor will guide you on settling the registration first, then we can book your PMS and insurance. Shall I have them contact you?",
+      "tl": "Salamat po sa pagsabi. Hindi po dapat i-drive ang sasakyang expired ang registration kaya hindi ako makakapag-book ng drive-in. Gagabayan po kayo ng advisor sa pag-asikaso muna ng registration, saka po natin i-book ang PMS at insurance. Ipa-contact ko po ba sila sa inyo?"
+    },
+    {
+      "id": "DRIVE_IN_REFUSAL",
+      "scenario": "Owner proposes to drive in while expired",
+      "when": "Never agree. Do not endorse.",
+      "used_by": "assistant",
+      "en": "I understand po, but I can't book a visit that needs the car to be driven while its registration is expired. An advisor can guide you on the next step. Reply AGENT to talk to a person.",
+      "tl": "Naiintindihan ko po, pero hindi ako makakapag-book ng visit na kailangang i-drive ang sasakyan habang expired ang registration. Gagabayan po kayo ng advisor sa susunod na hakbang. Reply AGENT para makausap ang tao."
+    },
+    {
+      "id": "DECLINE_CLOSE",
+      "scenario": "Owner declines",
+      "when": "",
+      "used_by": "assistant",
+      "en": "Understood po, thank you for your time. If you change your mind, just text us here.",
+      "tl": "Naiintindihan ko po, salamat sa oras ninyo. Kung magbago po ang isip ninyo, mag-text lang po dito."
+    },
+    {
+      "id": "CALLBACK_ASK",
+      "scenario": "Owner is busy",
+      "when": "",
+      "used_by": "assistant",
+      "en": "Sure po. What day and time should I message you again?",
+      "tl": "Sige po. Anong araw at oras po ako ulit magme-message sa inyo?"
+    },
+    {
+      "id": "CALLBACK_CONFIRM",
+      "scenario": "Callback agreed",
+      "when": "callback_time comes from the owner's reply.",
+      "used_by": "assistant",
+      "en": "Noted po. I'll message you again on {{callback_time}}.",
+      "tl": "Noted po. Magme-message po ako ulit sa {{callback_time}}."
+    },
+    {
+      "id": "HANDOFF",
+      "scenario": "Owner asks for a person",
+      "when": "Also used when the answer is not in the record or the templates.",
+      "used_by": "assistant",
+      "en": "Of course po. I'm passing you to a TMBG advisor now with the details so far. They will message you here.",
+      "tl": "Sige po. Ipapasa ko na po kayo sa TMBG advisor kasama ang mga detalye natin. Magme-message po sila dito."
+    },
+    {
+      "id": "OPTOUT_CONFIRM",
+      "scenario": "Opt-out",
+      "when": "STOP, TIGIL, or equivalent. Also sent by the service without calling the model.",
+      "used_by": "assistant",
+      "en": "Noted po. You will no longer receive campaign messages from us.",
+      "tl": "Noted po. Hindi na po kayo makakatanggap ng campaign messages mula sa amin."
+    },
+    {
+      "id": "UNCLEAR",
+      "scenario": "Message not understood",
+      "when": "",
+      "used_by": "assistant",
+      "en": "Sorry po, I didn't catch that. Please reply with a code: 1=Yes 2=Not yet 3=Not sure, or AGENT to talk to a person.",
+      "tl": "Pasensya na po, hindi ko po naintindihan. Mag-reply po ng code: 1=Oo 2=Hindi pa 3=Hindi sigurado, o AGENT para makausap ang tao."
+    }
+  ]
+}

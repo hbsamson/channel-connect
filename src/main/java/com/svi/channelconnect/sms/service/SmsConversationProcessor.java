@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -35,13 +36,22 @@ public class SmsConversationProcessor {
 	private final JdbcClient db;
 	private final Clock clock;
 	private final TransactionTemplate transaction;
+	private final ObjectProvider<SmsTmbgDemoService> demos;
 
 	public SmsConversationProcessor(SmsMessageRepository messages, DealershipRepository customers, DealershipAssistant assistant,
-			CampaignService campaigns, SmsProperties properties, SmsService sms, JdbcClient db, Clock clock, PlatformTransactionManager manager) {
+			CampaignService campaigns, SmsProperties properties, SmsService sms, JdbcClient db, Clock clock,
+			PlatformTransactionManager manager, ObjectProvider<SmsTmbgDemoService> demos) {
 		this.messages = messages; this.customers = customers; this.assistant = assistant; this.campaigns = campaigns;
 		this.properties = properties; this.sms = sms; this.db = db; this.clock = clock; transaction = new TransactionTemplate(manager);
+		this.demos = demos;
 	}
 	public void process(String id) {
+		SmsInbound receipt = messages.inbound(id);
+		SmsTmbgDemoService demo = demos.getIfAvailable();
+		if (demo != null && demo.handles(receipt)) {
+			demo.process(receipt);
+			return;
+		}
 		// Retain the existing single-instance ordering of campaign/appointment decisions.
 		synchronized (campaigns) {
 			Prepared prepared = transaction.execute(status -> prepare(messages.inbound(id)));
