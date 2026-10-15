@@ -103,10 +103,15 @@ public class GoipHttpApiReceivePoller {
 
 	void poll() {
 		if (!ready) return;
+		long started = System.nanoTime();
 		try {
 			var response = client.receive();
+			long fetchMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+			if (fetchMillis > sms.pollInterval().toMillis()) {
+				LOGGER.warn("SMS receive API slow; elapsedMs={}, pollIntervalMs={}", fetchMillis, sms.pollInterval().toMillis());
+			}
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				failure("http_status");
+				failure("http_status", started);
 				return;
 			}
 			List<RemoteMessage> received = snapshot(response.body());
@@ -126,21 +131,27 @@ public class GoipHttpApiReceivePoller {
 							? messages.acceptRemote(message.accountId(), message.receiveId(), message.sender(), message.content(), message.receivedAt().toEpochMilli())
 							: messages.archiveRemote(message.accountId(), message.receiveId(), message.sender(), message.content(), message.receivedAt().toEpochMilli());
 					result(accepted ? "accepted" : "duplicate");
+					if (accepted) {
+						String reason = processReply ? "eligible" : message.processReply() ? "superseded_in_snapshot" : message.archiveReason();
+						LOGGER.info("SMS receive imported; accountId={}, receiveId={}, action={}, reason={}, gatewayReceivedAt={}, importedAt={}",
+								message.accountId(), message.receiveId(), processReply ? "QUEUED" : "STORED", reason, message.receivedAt(), clock.instant());
+					}
 				} catch (SmsException exception) {
 					if (exception.reason() == SmsException.Reason.CAPACITY) {
-						failure("capacity");
+						failure("capacity", started);
 						return;
 					}
 					result("conflicting_receipt");
+					LOGGER.warn("SMS receive receipt conflict; accountId={}, receiveId={}", message.accountId(), message.receiveId());
 				}
 			}
 		} catch (InterruptedException exception) {
 			Thread.currentThread().interrupt();
 			result("interrupted");
 		} catch (IOException exception) {
-			failure("transport");
+			failure("transport", started);
 		} catch (RuntimeException exception) {
-			failure("invalid_response_or_storage");
+			failure("invalid_response_or_storage", started);
 		}
 	}
 
@@ -204,7 +215,8 @@ public class GoipHttpApiReceivePoller {
 			throw new IllegalArgumentException("Invalid inbound SMS content");
 		}
 		// raw_packet, gateway metadata, remote hashes and other subscribers' details never leave the snapshot parser.
-		return new RemoteMessage(route.accountId(), receiveId, sender, content, receivedAt, processReply);
+		String archiveReason = !phone ? "non_phone_sender" : !fresh ? "before_receive_baseline" : "no_active_demo_or_authorized_identity";
+		return new RemoteMessage(route.accountId(), receiveId, sender, content, receivedAt, processReply, archiveReason);
 	}
 
 	private static String text(JsonNode entry, String field) {
@@ -212,9 +224,9 @@ public class GoipHttpApiReceivePoller {
 		return entry.path(field).asString();
 	}
 	private void result(String outcome) { metrics.counter("sms.http_api.receive", "result", outcome).increment(); }
-	private void failure(String category) {
+	private void failure(String category, long started) {
 		result(category);
-		LOGGER.warn("SMS HTTP API receive deferred; category={}", category);
+		LOGGER.warn("SMS HTTP API receive deferred; category={}, elapsedMs={}", category, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
 	}
 
 	@PreDestroy
@@ -224,7 +236,7 @@ public class GoipHttpApiReceivePoller {
 	}
 
 	private record DemoParticipant(String accountId, String sender) { }
-	private record RemoteMessage(String accountId, long receiveId, String sender, String content, Instant receivedAt, boolean processReply) {
+	private record RemoteMessage(String accountId, long receiveId, String sender, String content, Instant receivedAt, boolean processReply, String archiveReason) {
 		@Override public String toString() { return "RemoteSms[payload=<redacted>]"; }
 	}
 }

@@ -55,8 +55,8 @@
       "scenario": "Offer appointment slots",
       "when": "Owner accepted. Only slots inside the registration window are ever offered.",
       "used_by": "assistant",
-      "en": "Slots at {{branch_name}}: {{slots_text}}. Reply {{slot_codes}}. Need other dates? Reply AGENT.",
-      "tl": "Mga slot po sa {{branch_name}}: {{slots_text}}. Reply {{slot_codes}}. Iba pong petsa? Reply AGENT.",
+      "en": "Slots at {{branch_name}}: {{slots_text}}. Reply with your preferred date/time or {{slot_codes}}.",
+      "tl": "Mga slot po sa {{branch_name}}: {{slots_text}}. Sabihin ang gustong petsa/oras o {{slot_codes}}.",
       "fallback_en": "Our advisor will message you shortly with available dates. Reply AGENT to talk to a person now.",
       "fallback_tl": "Magme-message po ang advisor namin para sa available na petsa. Reply AGENT kung gusto ninyong makausap ang tao ngayon."
     },
@@ -165,8 +165,8 @@
       "scenario": "Chosen slot no longer free (sent by the service)",
       "when": "The SERVICE sends this when the slot is taken or no longer valid.",
       "used_by": "service",
-      "en": "Sorry po, that slot was just taken. Available now: {{slots_text}}. Reply {{slot_codes}}.",
-      "tl": "Pasensya na po, kakakuha lang ng slot na iyon. Available ngayon: {{slots_text}}. Reply {{slot_codes}}.",
+      "en": "Sorry po, that slot was just taken. Available now: {{slots_text}}. Reply with a date/time or {{slot_codes}}.",
+      "tl": "Pasensya na po, kakakuha lang ng slot na iyon. Available ngayon: {{slots_text}}. Sabihin ang petsa/oras o {{slot_codes}}.",
       "fallback_en": "Sorry po, that slot was just taken and no other slot is open right now. An advisor will message you with new dates.",
       "fallback_tl": "Pasensya na po, kakakuha lang ng slot na iyon at wala nang ibang bukas ngayon. Magme-message po ang advisor namin para sa bagong petsa."
     },

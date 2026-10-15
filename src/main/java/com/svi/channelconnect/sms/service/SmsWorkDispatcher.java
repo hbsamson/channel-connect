@@ -66,7 +66,12 @@ public class SmsWorkDispatcher {
 	}
 	private void processInbound(String id) {
 		String previous = org.slf4j.MDC.get("correlationId"); org.slf4j.MDC.put("correlationId", id);
-		try { conversations.process(id); metrics.counter("sms.processing", "result", "completed").increment(); }
+		long started = System.nanoTime();
+		LOGGER.info("SMS processing started; messageId={}", id);
+		try {
+			conversations.process(id); metrics.counter("sms.processing", "result", "completed").increment();
+			LOGGER.info("SMS processing completed; messageId={}, elapsedMs={}", id, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+		}
 		catch (RuntimeException exception) {
 			store.retryInbound(id); metrics.counter("sms.processing", "result", "retry").increment();
 			if (store.inbound(id).status().equals("DEAD_LETTER")) metrics.counter("sms.processing", "result", "dead_letter").increment();
@@ -75,11 +80,12 @@ public class SmsWorkDispatcher {
 	}
 	private void processOutbound(SmsOutbound message) {
 		String previous = org.slf4j.MDC.get("correlationId"); org.slf4j.MDC.put("correlationId", message.id());
+		long started = System.nanoTime();
 		try {
 			var result = provider.send(message, () -> store.transmitting(message.id()));
 			store.finish(message.id(), result.status(), result.errorCode());
 			metrics.counter("sms.outbound", "result", result.status()).increment();
-			LOGGER.info("SMS send completed; messageId={}, status={}", message.id(), result.status());
+			LOGGER.info("SMS send completed; messageId={}, status={}, elapsedMs={}", message.id(), result.status(), TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
 		} catch (RuntimeException exception) {
 			String persisted = store.outbound(message.id()).orElseThrow().status();
 			String result = persisted.equals("TRANSMITTING") ? "UNKNOWN"

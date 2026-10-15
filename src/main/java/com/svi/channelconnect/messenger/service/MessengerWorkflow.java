@@ -4,6 +4,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import com.svi.channelconnect.messenger.dto.IncomingMessageDTO;
@@ -16,11 +17,14 @@ public class MessengerWorkflow {
 
     private final ConversationService conversations;
     private final com.svi.channelconnect.dealership.service.DealershipConversationService dealership;
+    private final ObjectProvider<MessengerTmbgDemoService> demo;
 
     public MessengerWorkflow(ConversationService conversations,
-                             com.svi.channelconnect.dealership.service.DealershipConversationService dealership) {
+                             com.svi.channelconnect.dealership.service.DealershipConversationService dealership,
+                             ObjectProvider<MessengerTmbgDemoService> demo) {
         this.conversations = conversations;
         this.dealership = dealership;
+        this.demo = demo;
     }
 
     public synchronized void process(IncomingMessageDTO incoming) {
@@ -29,6 +33,13 @@ public class MessengerWorkflow {
         String previousCorrelation = MDC.get("correlationId");
         MDC.put("correlationId", UUID.randomUUID().toString());
         try {
+            MessengerTmbgDemoService bookingDemo = demo.getIfAvailable();
+            if (bookingDemo != null) {
+                stage = "booking_demo";
+                LOGGER.info("Messenger processing stage={}", stage);
+                bookingDemo.process(incoming);
+                return;
+            }
             LOGGER.info("Messenger processing stage={}", stage);
             dealership.receive(new com.svi.channelconnect.dealership.model.IncomingMessage(incoming.channel(),
                     incoming.pageId(), incoming.senderId(), incoming.externalMessageId(), incoming.content(), incoming.timestamp()));

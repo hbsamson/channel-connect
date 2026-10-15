@@ -41,7 +41,7 @@ public class MessengerSendClient {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.pageAccessToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of("recipient", Map.of("id", message.recipientId()),
-                            "message_type", "RESPONSE",
+                            "messaging_type", "RESPONSE",
                             "message", Map.of("text", message.content())))
                     .retrieve()
                     .body(JsonNode.class);

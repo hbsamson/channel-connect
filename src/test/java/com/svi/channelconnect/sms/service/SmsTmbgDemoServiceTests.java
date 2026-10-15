@@ -1,11 +1,13 @@
 package com.svi.channelconnect.sms.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.core.io.DefaultResourceLoader;
 import tools.jackson.databind.JsonNode;
@@ -38,6 +41,7 @@ import com.svi.channelconnect.ai.config.AiProperties;
 import com.svi.channelconnect.ai.dto.AiRequest;
 import com.svi.channelconnect.ai.dto.AiResponse;
 import com.svi.channelconnect.dealership.persistence.DealershipRepository;
+import com.svi.channelconnect.dealership.service.TmbgBookingAssistant;
 import com.svi.channelconnect.sms.model.SmsInbound;
 import com.svi.channelconnect.sms.model.SmsSubmission;
 import com.svi.channelconnect.sms.persistence.SmsMessageRepository;
@@ -66,8 +70,9 @@ class SmsTmbgDemoServiceTests {
 			replies.add(invocation.getArgument(3));
 			return new SmsSubmission("reply-" + replies.size(), "QUEUED", false);
 		});
-		demo = new SmsTmbgDemoService(client, ai, json, new DefaultResourceLoader(), sms, messages,
+		var assistant = new TmbgBookingAssistant(client, ai, json, new DefaultResourceLoader(),
 				Clock.fixed(NOW, ZoneOffset.UTC), bookings.toString());
+		demo = new SmsTmbgDemoService(assistant, sms, messages);
 	}
 
 	@Test
@@ -155,13 +160,146 @@ class SmsTmbgDemoServiceTests {
 	}
 
 	@Test
+	void stopsCallingTheModelAfterSavingTheCustomerChosenBooking() throws Exception {
+		demo.start("sim-1", null);
+		reachSlots();
+		when(client.generateResponse(any())).thenReturn(answer(null, null, "SLOT_CHOSEN", "booking_requested", "A"));
+		demo.process(inbound("choice", "A"));
+
+		demo.process(inbound("after-booking", "Hello again"));
+
+		verify(client, times(4)).generateResponse(any());
+		verify(messages).completeInbound("after-booking");
+		assertThat(replies).hasSize(4);
+		assertThat(Files.readAllLines(bookings)).hasSize(1);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"A?", "Is Oct 16 available?", "Is Friday available", "I can't do Friday",
+			"Not 9am", "Maybe Friday", "Friday or Monday", "Oct 16 at 1pm", "9:30am", "Yes",
+			"October 19 at 9am", "October 19 2027", "October 30 please", "Friday October 19"})
+	void keepsReplyingWithoutBookingWhenTheCustomerHasNotChosenASlot(String text) throws Exception {
+		demo.start("sim-1", null);
+		reachSlots();
+		// Even an incorrect model decision must not substitute for a customer's selection.
+		when(client.generateResponse(any())).thenReturn(answer(null, null, "SLOT_CHOSEN", "booking_requested", "A"));
+
+		demo.process(inbound("not-a-choice", text));
+
+		assertThat(bookings).doesNotExist();
+		assertThat(replies.getLast()).contains("date/time", "A/B/C").doesNotContain("Confirmed");
+		demo.process(inbound("actual-choice", "A"));
+		assertThat(Files.readAllLines(bookings)).hasSize(1);
+		assertThat(replies.getLast()).contains("Confirmed po!");
+	}
+
+	@Test
+	void doesNotResetAConfirmedSessionWhenSendingANewGreetingFails() throws Exception {
+		demo.start("sim-1", null);
+		reachSlots();
+		when(client.generateResponse(any())).thenReturn(answer(null, null, "SLOT_CHOSEN", "booking_requested", "A"));
+		demo.process(inbound("choice", "A"));
+		when(sms.submit(anyString(), anyString(), anyString(), anyString())).thenThrow(new IllegalArgumentException("Submission rejected"));
+
+		assertThatThrownBy(() -> demo.start("sim-1", null)).isInstanceOf(IllegalArgumentException.class);
+		demo.process(inbound("after-failed-start", "Hello"));
+
+		verify(client, times(4)).generateResponse(any());
+		assertThat(replies).hasSize(4);
+		assertThat(Files.readAllLines(bookings)).hasSize(1);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"A", "slot A po", "Book A please", "Oct 16", "Friday", "Oct 16 at 9am", "Fri Oct 16 9:00AM", "2026-10-16", "09:00"})
+	void confirmsOnlyAnUnambiguousOfferedSlotSelection(String text) throws Exception {
+		demo.start("sim-1", null);
+		reachSlots();
+		when(client.generateResponse(any())).thenReturn(answer(null, null, "SLOT_CHOSEN", "booking_requested", "A"));
+
+		demo.process(inbound("choice", text));
+
+		assertThat(Files.readAllLines(bookings)).hasSize(1);
+		assertThat(replies.getLast()).contains("Confirmed po!");
+	}
+
+	@ParameterizedTest
+	@CsvSource(delimiter = '|', value = {
+			"October 19 please|B|2026-10-19T13:00",
+			"October 19, 2026|B|2026-10-19T13:00",
+			"I would like to book October 19 at 1 pm|B|2026-10-19T13:00",
+			"Can you book me for October 19 at 1pm?|B|2026-10-19T13:00",
+			"Sa October 19 na lang po|B|2026-10-19T13:00",
+			"Yung Monday po|B|2026-10-19T13:00",
+			"Monday works for me|B|2026-10-19T13:00",
+			"19th October 2026|B|2026-10-19T13:00",
+			"10/19/2026|B|2026-10-19T13:00",
+			"19/10/2026|B|2026-10-19T13:00",
+			"October 20 at 10am|C|2026-10-20T10:00",
+			"20 October at 10|C|2026-10-20T10:00",
+			"I prefer October 16, 2026 at 09:00|A|2026-10-16T09:00",
+			"Tomorrow please|A|2026-10-16T09:00",
+			"bukas po|A|2026-10-16T09:00"
+	})
+	void booksAnOfferedDateOrTimeFromNaturalCustomerWording(String text, String code, String appointment) throws Exception {
+		demo.start("sim-1", null);
+		reachSlots();
+		assertThat(replies.getLast()).contains("date/time");
+		when(client.generateResponse(any())).thenReturn(answer(null, null, "SLOT_CHOSEN", "booking_requested", code));
+
+		demo.process(inbound("date-choice", text));
+
+		assertThat(Files.readAllLines(bookings)).hasSize(1);
+		JsonNode booking = json.readTree(Files.readAllLines(bookings).getFirst());
+		assertThat(booking.path("appointment").asString()).isEqualTo(appointment);
+		assertThat(booking.path("slot_code").asString()).isEqualTo(code);
+		assertThat(replies.getLast()).contains("Confirmed po!");
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"CONFIRMED", "SLOT_CHOSEN", "DECLINED", "HANDOFF"})
+	void doesNotEndOrStrandTheConversationBasedOnlyOnTheModelStage(String stage) throws Exception {
+		demo.start("sim-1", null);
+		reachSlots();
+		when(client.generateResponse(any())).thenReturn(
+				answer("Which slot would you like po?", null, stage, null, null),
+				answer(null, null, "SLOT_CHOSEN", "booking_requested", "A"));
+
+		demo.process(inbound("model-stage", "Tell me more"));
+		assertThat(bookings).doesNotExist();
+		demo.process(inbound("choice", "A"));
+
+		verify(client, times(5)).generateResponse(any());
+		assertThat(Files.readAllLines(bookings)).hasSize(1);
+		assertThat(replies.getLast()).contains("Confirmed po!");
+	}
+
+	@Test
+	void keepsReplyingAndAllowsRetryWhenSavingTheBookingFails() throws Exception {
+		demo.start("sim-1", null);
+		reachSlots();
+		when(client.generateResponse(any())).thenReturn(answer(null, null, "SLOT_CHOSEN", "booking_requested", "A"));
+		Files.createDirectory(bookings);
+
+		demo.process(inbound("failed-save", "A"));
+
+		assertThat(replies.getLast()).doesNotContain("Confirmed po!", "TMB-00001");
+		Files.delete(bookings);
+		demo.process(inbound("retry-save", "A"));
+
+		verify(client, times(5)).generateResponse(any());
+		assertThat(Files.readAllLines(bookings)).hasSize(1);
+		assertThat(replies.getLast()).contains("Confirmed po!", "TMB-00001");
+	}
+
+	@Test
 	void acceptsTheSuppliedLongerMenuAndConfirmationThroughRealTwoSegmentValidation() throws Exception {
 		var properties = SmsTestProperties.properties(Map.of("sms.max-segments", "2"));
 		var realSms = new SmsService(properties, messages, mock(DealershipRepository.class));
 		var ai = new AiProperties(AiProperties.Provider.OPENAI, "synthetic-key", "synthetic-model",
 				URI.create("https://example.invalid/v1"), Duration.ofSeconds(1), 0, 4096, "", 2048);
-		demo = new SmsTmbgDemoService(client, ai, json, new DefaultResourceLoader(), realSms, messages,
+		var assistant = new TmbgBookingAssistant(client, ai, json, new DefaultResourceLoader(),
 				Clock.fixed(NOW, ZoneOffset.UTC), bookings.toString());
+		demo = new SmsTmbgDemoService(assistant, realSms, messages);
 		demo.start("sim-1", null);
 		reachSlots();
 		when(client.generateResponse(any())).thenReturn(answer(null, null, "SLOT_CHOSEN", "booking_requested", "A"));

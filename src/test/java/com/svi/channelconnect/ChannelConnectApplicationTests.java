@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
-@SpringBootTest
+@SpringBootTest(properties = "sms.tmbg-bookings-file=target/test-context-bookings.txt")
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 class ChannelConnectApplicationTests {
@@ -32,6 +32,9 @@ class ChannelConnectApplicationTests {
 	void contextLoads() {
 		assertThat(aiClient).isInstanceOf(MockAiClient.class);
 		assertThat(context.getBeansOfType(com.svi.channelconnect.sms.goip.GoipSmsProvider.class)).isEmpty();
+		assertThat(context.getBeansOfType(com.svi.channelconnect.sms.service.SmsTmbgDemoService.class)).isEmpty();
+		assertThat(context.getBeansOfType(com.svi.channelconnect.messenger.service.MessengerTmbgDemoService.class)).hasSize(1);
+		assertThat(context.getBeansOfType(com.svi.channelconnect.dealership.service.TmbgBookingAssistant.class)).hasSize(1);
 	}
 
 	@Test
