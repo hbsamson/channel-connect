@@ -1,8 +1,9 @@
 package com.svi.channelconnect.telegram.config;
 
 import java.net.http.HttpClient;
+import java.time.Clock;
 
-import com.svi.channelconnect.ai.client.AiClient;
+import com.svi.channelconnect.dealership.service.DealershipConversationService;
 import com.svi.channelconnect.telegram.client.TelegramApiClient;
 import com.svi.channelconnect.telegram.controller.TelegramWebhookController;
 import com.svi.channelconnect.telegram.exception.TelegramExceptionHandler;
@@ -71,8 +72,8 @@ public class TelegramConnectorConfig {
 
 	@Bean
 	TelegramMessageProcessingService telegramMessageProcessingService(
-			AiClient aiClient, TelegramApiClient apiClient) {
-		return new TelegramMessageProcessingService(aiClient, apiClient);
+			DealershipConversationService conversations, TelegramProperties properties, Clock clock) {
+		return new TelegramMessageProcessingService(conversations, properties, clock);
 	}
 
 	@Bean

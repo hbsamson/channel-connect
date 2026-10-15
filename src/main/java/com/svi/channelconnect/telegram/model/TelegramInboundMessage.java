@@ -8,7 +8,11 @@ public record TelegramInboundMessage(
 		String text
 ) {
 	public String conversationId() {
-		return "telegram:" + chatId + (messageThreadId == null ? "" : ":" + messageThreadId);
+		return "telegram:" + recipientId();
+	}
+
+	public String recipientId() {
+		return chatId + (messageThreadId == null ? "" : ":" + messageThreadId);
 	}
 
 	@Override

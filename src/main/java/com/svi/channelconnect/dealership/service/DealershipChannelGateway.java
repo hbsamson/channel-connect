@@ -13,6 +13,7 @@ import com.svi.channelconnect.common.dto.SendMessageResponseDTO;
 import com.svi.channelconnect.dealership.model.CampaignConfiguration;
 import com.svi.channelconnect.dealership.model.ChannelIdentity;
 import com.svi.channelconnect.messenger.config.MessengerProperties;
+import com.svi.channelconnect.telegram.service.TelegramCampaignPolicy;
 import com.svi.channelconnect.whatsapp.config.OutboundMessagingProperties;
 import com.svi.channelconnect.whatsapp.config.WhatsAppProperties;
 import com.svi.channelconnect.whatsapp.dto.request.OutboundTemplateMessageRequest;
@@ -26,24 +27,34 @@ public class DealershipChannelGateway {
 	private final ObjectProvider<OutboundMessageService> outbound;
 	private final ObjectProvider<OutboundMessagingProperties> restrictions;
 	private final boolean simulationsAvailable;
+	private final boolean telegramEnabled;
+	private final ObjectProvider<TelegramCampaignPolicy> telegram;
 	private final ObjectProvider<com.svi.channelconnect.sms.service.SmsService> sms;
 
 	public DealershipChannelGateway(MessagingAppHandler messaging, MessengerProperties messenger, WhatsAppProperties whatsapp,
 			ObjectProvider<OutboundMessageService> outbound, ObjectProvider<OutboundMessagingProperties> restrictions, Environment env,
-			ObjectProvider<com.svi.channelconnect.sms.service.SmsService> sms) {
+			ObjectProvider<com.svi.channelconnect.sms.service.SmsService> sms,
+			ObjectProvider<TelegramCampaignPolicy> telegram) {
 		this.messaging = messaging;
 		this.messenger = messenger;
 		this.whatsapp = whatsapp;
 		this.outbound = outbound;
 		this.restrictions = restrictions;
 		this.simulationsAvailable = env.matchesProfiles("local", "test");
+		this.telegramEnabled = env.getProperty("telegram.enabled", Boolean.class, false);
+		this.telegram = telegram;
 		this.sms = sms;
 	}
 
 	public boolean canInitiate(ChannelIdentity identity, CampaignConfiguration config, String script, long now) {
 		if (!identity.verified() || !identity.consent() || !identity.outboundAllowed()) return false;
 		return switch (identity.channel()) {
-			case "TELEGRAM" -> simulationsAvailable && identity.accountId().equals("demo") && identity.externalId().startsWith("demo-");
+			case "TELEGRAM" -> {
+				TelegramCampaignPolicy policy = telegram.getIfAvailable();
+				yield policy != null ? policy.canInitiate(identity, script)
+						: !telegramEnabled && simulationsAvailable && identity.accountId().equals("demo")
+								&& identity.externalId().startsWith("demo-");
+			}
 			case "SMS" -> sms.getIfAvailable() != null ? sms.getObject().canInitiate(identity.accountId(), identity.externalId())
 					: simulationsAvailable && identity.accountId().equals("demo") && identity.externalId().startsWith("demo-");
 			case "MESSENGER" -> identity.accountId().equals(messenger.pageId()) && inWindow(identity, now);

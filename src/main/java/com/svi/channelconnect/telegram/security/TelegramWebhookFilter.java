@@ -68,10 +68,10 @@ public class TelegramWebhookFilter extends OncePerRequestFilter {
 		response.getWriter().write("{\"status\":413,\"error\":\"Webhook payload too large\"}");
 	}
 
-	private static final class CachedBodyRequest extends HttpServletRequestWrapper {
+	static final class CachedBodyRequest extends HttpServletRequestWrapper {
 		private final byte[] body;
 
-		private CachedBodyRequest(HttpServletRequest request, byte[] body) {
+		CachedBodyRequest(HttpServletRequest request, byte[] body) {
 			super(request);
 			this.body = body;
 		}

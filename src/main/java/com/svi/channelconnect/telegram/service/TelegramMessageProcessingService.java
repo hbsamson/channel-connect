@@ -1,28 +1,35 @@
 package com.svi.channelconnect.telegram.service;
 
-import com.svi.channelconnect.ai.client.AiClient;
-import com.svi.channelconnect.ai.dto.AiRequest;
-import com.svi.channelconnect.ai.exception.AiClientException;
+import java.time.Clock;
+
 import com.svi.channelconnect.common.exception.ExternalFailureCategory;
-import com.svi.channelconnect.telegram.client.TelegramApiClient;
+import com.svi.channelconnect.dealership.model.IncomingMessage;
+import com.svi.channelconnect.dealership.service.DealershipConversationService;
+import com.svi.channelconnect.telegram.config.TelegramProperties;
+import com.svi.channelconnect.telegram.exception.TelegramApiException;
 import com.svi.channelconnect.telegram.model.TelegramInboundMessage;
-import org.springframework.util.StringUtils;
 
 public class TelegramMessageProcessingService {
-	private final AiClient aiClient;
-	private final TelegramApiClient telegramApiClient;
+	private final DealershipConversationService conversations;
+	private final String botId;
+	private final Clock clock;
 
-	public TelegramMessageProcessingService(AiClient aiClient, TelegramApiClient telegramApiClient) {
-		this.aiClient = aiClient;
-		this.telegramApiClient = telegramApiClient;
+	public TelegramMessageProcessingService(DealershipConversationService conversations,
+			TelegramProperties properties, Clock clock) {
+		this.conversations = conversations;
+		// The numeric prefix identifies the bot without retaining its secret token.
+		this.botId = properties.botToken().substring(0, properties.botToken().indexOf(':'));
+		this.clock = clock;
 	}
 
 	public void process(TelegramInboundMessage message) {
-		var response = aiClient.generateResponse(new AiRequest(message.conversationId(), message.text()));
-		if (response == null || !StringUtils.hasText(response.text()) || response.text().length() > 4096) {
-			throw new AiClientException(ExternalFailureCategory.MALFORMED_RESPONSE,
-					"AI provider returned an invalid Telegram text response", null);
+		// The shared workflow supplies dealership context, stores history and sends through TELEGRAM.
+		// updateId is unique per bot; messageId alone can collide between separate chats.
+		var result = conversations.receive(new IncomingMessage("TELEGRAM", botId,
+				message.recipientId(), Long.toString(message.updateId()), message.text(), clock.instant()));
+		if ("UNKNOWN".equals(result.deliveryStatus())) {
+			throw new TelegramApiException(ExternalFailureCategory.TRANSIENT,
+					"Telegram dealership reply submission outcome is unknown");
 		}
-		telegramApiClient.sendTextMessage(message.chatId(), message.messageThreadId(), response.text());
 	}
 }
