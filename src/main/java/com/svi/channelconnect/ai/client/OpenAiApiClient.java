@@ -71,6 +71,10 @@ public class OpenAiApiClient implements AiClient {
 						"OpenAI returned an empty response", null);
 			}
 			if (text.length() > properties.maxResponseCharacters()) {
+				if (request.jsonOutput()) {
+					throw new AiClientException(ExternalFailureCategory.MALFORMED_RESPONSE,
+							"OpenAI structured response exceeds the configured character limit", null);
+				}
 				text = text.substring(0, properties.maxResponseCharacters());
 			}
 			return new AiResponse(text);

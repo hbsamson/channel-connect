@@ -5,10 +5,17 @@
     {
       "id": "OPEN_GREETING",
       "scenario": "First outbound SMS (greeting)",
-      "when": "Identify the AI assistant, customer vehicle and renewal period. Briefly introduce regular maintenance and car insurance, but ask only about registration renewal. A yes accepts renewal only; the remaining services are offered individually later.",
+      "when": "Offer maintenance, comprehensive insurance and registration renewal together. A yes accepts all three; a no starts individual offers without declining any service.",
       "used_by": "campaign_sender",
-      "en": "Hello {{first_name}}! I'm Toyota Manila Bay's AI assistant, writing about your {{model_or_plate}}. Your registration renewal period is {{reg_window_start}} to {{reg_window_end}}. We also help with regular maintenance and car insurance. Would you like help renewing your registration?",
-      "tl": "Hello po, {{first_name}}! AI assistant po ako ng Toyota Manila Bay tungkol sa {{model_or_plate}} ninyo. Renewal ng registration: {{reg_window_start}} hanggang {{reg_window_end}}. May regular maintenance at car insurance din. Gusto po ba ninyo ng tulong sa registration renewal?"
+      "en": "Hi {{first_name}}! This is Toyota Manila Bay's AI Assistant. Your {{model_or_plate}} is due for preventive maintenance, comprehensive insurance renewal, and registration renewal this month. Skip the hassle of LTO lines and insurance broker visits! Let Toyota Manila Bay take care of all three in just one convenient visit. Would you like to schedule an appointment?",
+      "tl": "Hi {{first_name}}! Ako po ang AI Assistant ng Toyota Manila Bay. Due na po ngayong buwan ang inyong {{model_or_plate}} para sa preventive maintenance, comprehensive insurance renewal, at registration renewal. Iwas na po sa mahabang pila sa LTO at pagpunta sa insurance broker! Hayaan pong asikasuhin ng Toyota Manila Bay ang tatlo sa isang convenient na visit. Gusto po ba ninyong magpa-schedule ng appointment?"},
+    {
+      "id": "RESUME_COMBINED_OFFER",
+      "scenario": "Continue the opening offer without repeating the introduction",
+      "when": "The combined opening offer has not yet been accepted or declined.",
+      "used_by": "service",
+      "en": "Would you like an appointment to handle your preventive maintenance, comprehensive insurance and registration renewal together?",
+      "tl": "Gusto po ba ninyong magpa-appointment para sabay maasikaso ang preventive maintenance, comprehensive insurance at registration renewal?"
     },
     {
       "id": "GREETING_ACK",
@@ -201,8 +208,8 @@
       "scenario": "Service 1: registration renewal",
       "when": "Registration is the first offer. Give the supplied renewal period; do not ask for an appointment date yet.",
       "used_by": "assistant",
-      "en": "Your renewal period is {{reg_window_start}} to {{reg_window_end}}. Our fee is estimated at {{reg_service_fee}}, plus actual government registration charges; an advisor confirms the total. Would you like help?",
-      "tl": "Ang renewal period po ninyo ay {{reg_window_start}} hanggang {{reg_window_end}}. Estimated na {{reg_service_fee}} po ang fee namin, bukod sa actual government registration charges; advisor ang magko-confirm ng total. Gusto po ninyo ng tulong?",
+      "en": "No problem, {{first_name}}! Just a friendly reminder that your {{model_or_plate}} registration is due for renewal soon. Avoid the hassle of long LTO lines and let Toyota Manila Bay handle the renewal for you. Would you like us to help you schedule your vehicle registration renewal?",
+      "tl": "No problem po, {{first_name}}! Paalala lang po na malapit nang mag-expire ang registration ng inyong {{model_or_plate}}. Iwas na po sa mahabang pila sa LTO! Hayaan pong Toyota Manila Bay ang mag-asikaso ng inyong registration renewal. Gusto po ba ninyong magpa-schedule para dito?",
       "fallback_en": "You can renew your registration now, anytime until {{reg_window_end}}. Our advisor will confirm the fee and government registration charges. Want us to handle it for you?",
       "fallback_tl": "Pwede na po ninyong i-renew ang registration, anumang araw hanggang {{reg_window_end}}. Kukumpirmahin ng advisor ang fee at ang government registration charges. Gusto po ba ninyong kami na ang mag-asikaso?"
     },

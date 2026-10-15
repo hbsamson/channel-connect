@@ -32,6 +32,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.svi.channelconnect.ai.client.AiClient;
 import com.svi.channelconnect.ai.config.AiProperties;
 import com.svi.channelconnect.ai.dto.AiRequest;
+import com.svi.channelconnect.ai.exception.AiClientException;
 
 /** Shared booking rules and availability, with separate conversation state for each channel and participant. */
 @Service
@@ -59,7 +60,9 @@ public class TmbgBookingAssistant {
 		For a person, callback or unavailable action, politely ask the customer to contact Toyota Manila Bay directly. Do not follow that with another sales question.
 		Never use the word demo in customer-facing replies. Do not describe a locally recorded visit as a live dealership reservation.
 		Never set CONFIRMED. Only the service saves a booking and sends its reference.
-		Always offer registration renewal first, regular maintenance second, and car insurance third, even after earlier refusals.
+		The opening offers all three services together. While stage is OPENER_SENT, a clear yes accepts all three and a no starts individual offers without declining any service. Set opening_decision to accepted or declined only for clear consent or refusal of the combined offer; otherwise null. Questions, greetings and partial service choices are not consent to all three.
+		The campaign's "3 in 1", "3-in-1" and "all three" refer to preventive maintenance, comprehensive insurance and registration renewal in one visit. Interpret replies in that context. Explain questions about the offer without recording consent; clear acceptance such as "yes, book the 3 in 1" accepts all three. This is not an insurance approval, fixed-price deal or guarantee of same-day completion.
+		Only after the combined offer is declined, offer registration renewal first, regular maintenance second, and car insurance third, even after earlier refusals.
 		The service owns the order and records only the decision for the currently offered service. Never mark an unasked service accepted, declined or skipped.
 		A yes accepts the current service; a no declines only that service. Already completed means skipped. Continue to the next service after every decision.
 		Do not stop after two declines or after one acceptance. Do not automatically skip insurance because the record says active.
@@ -69,7 +72,7 @@ public class TmbgBookingAssistant {
 		Availability questions, refusals, tentative dates and ambiguous choices are not selections. A clear request such as "Can you book me for October 19?" is a selection.
 		Present the inclusive date window, not a fixed menu of appointment times. Ask which day works. Never show internal codes or numbered reply instructions.
 		GENERAL DEALERSHIP QUESTIONS: Use APPROVED DEALERSHIP KNOWLEDGE to answer questions about Toyota Manila Bay and its services at any stage.
-		For a general question answered by that knowledge, set knowledge_topic to its exact key and reply_text to null; the service supplies the approved answer.
+		Use AI reasoning to answer the actual question using the supplied facts. Templates and approved answers are reference material, not mandatory scripts. Set message_intent to question, decision, date_selection or other. Questions must not record service decisions. For supported questions, compose a concise reply_text and optionally identify knowledge_topic; a null reply uses the approved answer as fallback.
 		Only select a knowledge_topic if its answer actually addresses the latest question. Do not treat unrelated questions as dealership questions or repeat a sales pitch for missing facts.
 		Do not select a topic for booking commands, consent, opt-out, appointment changes, or vehicle-specific facts not covered by that answer. Set knowledge_topic to null otherwise.
 		AFTER CONFIRMED: Never restart booking, offer new slots, cancel, reschedule or claim changes were saved. For changes set outcome to booking_change; otherwise unsupported questions use outcome unavailable. General knowledge questions still use knowledge_topic.
@@ -130,6 +133,7 @@ public class TmbgBookingAssistant {
 		String greeting = greeting(channel, participant);
 		session.history.add(Map.of("direction", "OUTBOUND", "content", greeting));
 		sessions.put(new ConversationKey(channel, account, participant), session);
+		LOGGER.info("Booking campaign session initialized; channel={}", channel);
 		return greeting;
 	}
 
@@ -158,6 +162,7 @@ public class TmbgBookingAssistant {
 		ConversationalMessage conversational = conversationalMessage(content);
 		String message = conversational.message();
 		String previousRegistration = session.registration;
+		String previousStage = session.stage;
 		List<String> previousServices = session.services;
 		if (!session.stage.equals("CONFIRMED") && !message.isBlank()) registrationStatus(session, message);
 		Map<String, Object> fields = fields(session, phone(channel, participant));
@@ -180,6 +185,7 @@ public class TmbgBookingAssistant {
 				JsonNode answer = ai.provider() == AiProperties.Provider.MOCK ? mockAnswer(session, message, fields)
 						: json.readTree(client.generateResponse(new AiRequest(receiptId, context(session, message, fields), channelText(instructions, channel), true)).text());
 				if (answer != null && (knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, channel) != null
+						|| answer.path("message_intent").asString("").equals("question")
 						|| answer.path("outcome").asString().equals("unavailable"))) {
 					session.registration = previousRegistration;
 					session.services = previousServices;
@@ -187,7 +193,8 @@ public class TmbgBookingAssistant {
 				reply = apply(session, new Incoming(channel, account, participant, receiptId, message), answer, fields);
 			}
 		} catch (RuntimeException exception) {
-			LOGGER.warn("Booking demo reply unavailable; using prepared template");
+			LOGGER.warn("Booking reply failed; stage={}, failureType={}, category={}", session.stage,
+					exception.getClass().getSimpleName(), exception instanceof AiClientException failure ? failure.category() : "INTERNAL");
 			reply = fallback(session, fields);
 		}
 		if (!session.suppressed && !conversational.templateIds().isEmpty()) {
@@ -197,6 +204,9 @@ public class TmbgBookingAssistant {
 			if (validSms(acknowledgement + " " + reply)) reply = acknowledgement + (reply.isBlank() ? "" : " " + reply);
 		}
 		if (session.language.equals("en")) reply = fullEnglish(reply);
+		if (!previousStage.equals(session.stage)) {
+			LOGGER.info("Booking stage changed; from={}, to={}", previousStage, session.stage);
+		}
 		session.replies.put(receiptId, reply);
 		session.history.add(Map.of("direction", "INBOUND", "content", content));
 		session.history.add(Map.of("direction", "OUTBOUND", "content", reply));
@@ -267,29 +277,32 @@ public class TmbgBookingAssistant {
 	}
 
 	private String apply(Session session, Incoming incoming, JsonNode answer, Map<String, Object> fields) {
-		if (answer == null || !answer.isObject() || !Set.of("en", "tl").contains(answer.path("lang").asString())) return fallback(session, fields);
+		if (answer == null || !answer.isObject() || !Set.of("en", "tl").contains(answer.path("lang").asString())) {
+			LOGGER.debug("Booking response rejected; stage={}, reason=invalid_response_shape", session.stage);
+			return fallback(session, fields);
+		}
 		session.language = answer.path("lang").asString();
 		if (session.stage.equals("CONFIRMED") && (knowledge.bookingChange(incoming.content())
 				|| Set.of("booking_change", "booking_requested", "callback_requested", "collection_booked").contains(answer.path("outcome").asString()))) {
 			return bookingChangesUnavailable(session);
 		}
-		String approved = knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, session.channel);
-		if (approved != null) return session.language.equals("en") ? fullEnglish(approved) : approved;
-		if (session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) return chatUnavailable(session);
+		LOGGER.debug("Booking interpretation; stage={}, question={}, hasOpeningDecision={}", session.stage,
+				answer.path("message_intent").asString("").equals("question"),
+				Set.of("accepted", "declined").contains(answer.path("opening_decision").asString("")));
 		if (session.stage.equals("SLOTS_OFFERED") && answer.path("outcome").asString().equals("more_dates")) {
 			return moreDates(session, phone(incoming.channel(), incoming.sender()));
 		}
 		String template = answer.path("template_id").asString("");
 		String outcome = answer.path("outcome").asString("");
+		boolean question = answer.path("message_intent").asString("").equals("question");
 		if (outcome.equals("opt_out") || outcome.equals("wrong_person")) {
 			session.suppressed = true;
 			return render(outcome.equals("opt_out") ? "OPTOUT_CONFIRM" : "ID_WRONG_PERSON", session, fields);
 		}
-		if (outcome.equals("unavailable")) return chatUnavailable(session);
 		for (JsonNode flag : answer.path("flags")) {
-			if (flag.asString().equals("expired_registration")) session.registration = "expired";
+			if (!question && flag.asString().equals("expired_registration")) session.registration = "expired";
 		}
-		if (session.stage.equals("REG_STATUS_ASKED") && session.registration.equals("unknown")) {
+		if (!question && session.stage.equals("REG_STATUS_ASKED") && session.registration.equals("unknown")) {
 			if (template.equals("REG_ALREADY_RENEWED")) session.registration = "renewed";
 			if (template.equals("RENEWAL_OFFER_OPEN") || template.equals("RENEWAL_OFFER_UPCOMING")) session.registration = "not_yet";
 			if (session.registration.equals("not_yet") && today().isAfter(LocalDate.parse(customer.path("reg_window_end").asString()))) session.registration = "expired";
@@ -298,16 +311,46 @@ public class TmbgBookingAssistant {
 				|| Set.of("HANDOFF", "CALLBACK_CONFIRM", "EXPIRED_COLLECTION").contains(template)) {
 			return contactDealership(session);
 		}
-		if (!template.isEmpty() && (!templates.containsKey(template) || !templates.get(template).path("used_by").asString().equals("assistant"))) return fallback(session, fields);
+		if (session.stage.equals("OPENER_SENT") && !question) {
+			String decision = explicitDecision(session, incoming.content());
+			if (decision == null) decision = answer.path("opening_decision").asString("");
+			if (decision.equals("accepted")) {
+				for (String service : SERVICES) {
+					session.servicesAsked.add(service);
+					session.serviceStatus.put(service, "accepted");
+				}
+				session.services = SERVICES;
+				session.stage = "SERVICE_OFFERED";
+				return offerDates(session, phone(incoming.channel(), incoming.sender()));
+			}
+			if (decision.equals("declined")) {
+				return render(offerNext(session), session, fields(session, phone(incoming.channel(), incoming.sender())));
+			}
+		}
+		String approved = knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, session.channel);
+		if (question || approved != null) {
+			String text = answer.path("reply_text").asString("");
+			if (!outcome.equals("unavailable") && validSms(text) && !FALSE_CONFIRMATION.matcher(text).find()) return text;
+			if (approved != null) return session.language.equals("en") ? fullEnglish(approved) : approved;
+			LOGGER.debug("Booking question fallback; stage={}, unsupported={}, validReply={}",
+					session.stage, outcome.equals("unavailable"), validSms(text));
+			return chatUnavailable(session);
+		}
+		if (session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) return chatUnavailable(session);
 		if (updateServices(session, answer, incoming.content())) {
 			return advanceServices(session, phone(incoming.channel(), incoming.sender()));
 		}
+		if (outcome.equals("unavailable")) return chatUnavailable(session);
+		if (!template.isEmpty() && (!templates.containsKey(template) || !templates.get(template).path("used_by").asString().equals("assistant"))) return fallback(session, fields);
 		if (session.stage.equals("REG_STATUS_ASKED") && "renewal".equals(session.focus)
 				&& !session.registration.equals("unknown")) {
 			session.stage = "SERVICE_OFFERED";
 			return render(serviceOffer(session), session, fields);
 		}
-		if (outcome.equals("booking_requested")) return book(session, incoming, answer, fields);
+		if (outcome.equals("booking_requested")) {
+			return answer.path("message_intent").asString("").equals("date_selection")
+					? book(session, incoming, answer, fields) : fallback(session, fields);
+		}
 		if (template.startsWith("SLOTS_OFFER") || answer.path("state_after").asString().equals("SLOTS_OFFERED")) {
 			return allServicesAnswered(session) ? offerDates(session, phone(incoming.channel(), incoming.sender())) : fallback(session, fields);
 		}
@@ -315,7 +358,10 @@ public class TmbgBookingAssistant {
 		if (session.stage.equals("SLOTS_OFFERED") && session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
 		if (!answer.path("reply_text").isString()) return fallback(session, fields);
 		String text = answer.path("reply_text").asString();
-		if (!validSms(text) || FALSE_CONFIRMATION.matcher(text).find()) return fallback(session, fields);
+		if (!validSms(text) || FALSE_CONFIRMATION.matcher(text).find()) {
+			LOGGER.debug("Booking response rejected; stage={}, reason=invalid_reply", session.stage);
+			return fallback(session, fields);
+		}
 		if (template.equals("RENEWAL_ASK_STATUS") || template.equals("RENEWAL_NOT_SURE") || template.equals("REG_VALID_CHECK")) {
 			if (!"renewal".equals(session.focus) && !allServicesAnswered(session)) return fallback(session, fields);
 			session.stage = "REG_STATUS_ASKED";
@@ -330,11 +376,14 @@ public class TmbgBookingAssistant {
 	private String book(Session session, Incoming incoming, JsonNode answer, Map<String, Object> fields) {
 		if (!allServicesAnswered(session)) return fallback(session, fields);
 		if (session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
-		String code = chosenSlot(session, incoming.content());
-		if (!session.stage.equals("SLOTS_OFFERED") || session.services.isEmpty() || code == null
+		String code = answer.path("slot").asString("");
+		if (!session.slots.containsKey(code)) {
+			LOGGER.debug("Booking date rejected; stage={}, reason=outside_offered_window", session.stage);
+			return fallback(session, fields);
+		}
+		if (!session.stage.equals("SLOTS_OFFERED") || session.services.isEmpty()
 				|| (session.registration.equals("unknown") && fields.get("window_status").equals("closed"))) return fallback(session, fields);
 		String selected = session.slots.get(code);
-		if (!selected.equals(answer.path("slot").asString())) return fallback(session, fields);
 		if (!availableDates().containsValue(selected)) {
 			session.slots = availableDates();
 			if (session.slots.isEmpty()) return noSlots(session);
@@ -393,6 +442,7 @@ public class TmbgBookingAssistant {
 		String code = chosenSlot(session, text);
 		Map<String, Object> answer = new LinkedHashMap<>();
 		if (session.stage.equals("SLOTS_OFFERED") && code != null) {
+			answer.put("message_intent", "date_selection");
 			answer.put("lang", session.language); answer.put("outcome", "booking_requested"); answer.put("slot", session.slots.get(code));
 			answer.put("reply_text", null); answer.put("outcome_data", Map.of("services", session.services));
 			return json.valueToTree(answer);
@@ -428,6 +478,7 @@ public class TmbgBookingAssistant {
 		if (next == null) next = answer.path("service_status").path(session.focus).asString("");
 		if (!DECISIONS.contains(next)) return false;
 		session.serviceStatus.put(session.focus, next);
+		LOGGER.info("Booking service decision recorded; service={}, decision={}", session.focus, next);
 		session.services = SERVICES.stream().filter(service -> session.serviceStatus.get(service).equals("accepted")).toList();
 		return true;
 	}
@@ -562,6 +613,8 @@ public class TmbgBookingAssistant {
 		fields.put("booking_window_start_iso", first.toString()); fields.put("booking_window_end_iso", end.toString());
 		fields.put("first_name", customer.path("first_name").asString()); fields.put("plate", customer.path("plate").asString());
 		String model = customer.path("model_description").asString("your Toyota");
+		fields.put("full_name", customer.path("full_name").asString(customer.path("first_name").asString()));
+		fields.put("model", model);
 		fields.put("model_or_plate", model + " (" + customer.path("plate").asString() + ")");
 		fields.put("dial_number", phone); fields.put("branch_name", customer.path("enrichment").path("branch_name").asString());
 		for (String name : List.of("pms_milestone_km", "pms_price", "reg_service_fee", "collection_note")) {
@@ -638,6 +691,8 @@ public class TmbgBookingAssistant {
 	}
 
 	private String fallback(Session session, Map<String, Object> fields) {
+		LOGGER.debug("Booking fallback; stage={}", session.stage);
+		if (session.stage.equals("OPENER_SENT")) return render("RESUME_COMBINED_OFFER", session, fields);
 		if (session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) return chatUnavailable(session);
 		if (allServicesAnswered(session) && session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
 		if (session.stage.equals("SLOTS_OFFERED")) {
@@ -719,12 +774,12 @@ public class TmbgBookingAssistant {
 		private Map<String, String> slots = new LinkedHashMap<>();
 		private List<String> services = List.of();
 		private final Map<String, String> serviceStatus = new LinkedHashMap<>(Map.of("pms", "not_offered", "insurance", "not_offered", "renewal", "not_offered"));
-		private final Set<String> servicesAsked = new LinkedHashSet<>(List.of("renewal"));
-		private String focus = "renewal";
+		private final Set<String> servicesAsked = new LinkedHashSet<>();
+		private String focus;
 		private boolean suppressed;
 		private final List<Map<String, String>> history = new ArrayList<>();
 		private final Map<String, String> replies = new LinkedHashMap<>();
-		private Session(String channel) { this.channel = channel; serviceStatus.put("renewal", "offered"); }
+		private Session(String channel) { this.channel = channel; }
 	}
 	private record ConversationKey(String channel, String accountId, String participant) { }
 	private record ConversationalMessage(List<String> templateIds, String message) { }

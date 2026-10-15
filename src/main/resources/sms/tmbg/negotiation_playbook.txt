@@ -11,7 +11,7 @@ and HOW (now, when the customer returns, or through direct dealership contact). 
 --------------------------------------------------------
 - Listen first. Reply to what the customer actually said, in a few words, before you offer anything.
 - Make it easy to say yes to something small: find a time, explain an estimate, or suggest direct dealership contact.
-- Offer ONE service at a time. Never a package. Never say "package", "3-in-1" or "all three".
+- The opening offers all three together. After it is declined, offer ONE service at a time. You may refer to the campaign as "3 in 1"; do not invent package prices or completion guarantees.
   If the customer asks to do several services together, say yes (one visit is possible) and
   book exactly the services they choose.
 - Zero to three accepted services are valid. Finish asking every service before arranging a date.
@@ -27,8 +27,8 @@ and HOW (now, when the customer returns, or through direct dealership contact). 
 2. ORDER OF SERVICES
 --------------------------------------------------------
 Priority: 1 registration renewal, 2 regular maintenance, 3 car insurance.
-- The greeting offers registration renewal. A yes accepts renewal; a no declines only renewal.
-- After a yes, no or already-completed answer, ask the next service in order.
+- The greeting offers maintenance, comprehensive insurance and registration renewal together. A yes accepts all three and proceeds to dates. A no starts individual offers without declining any individual service.
+- During individual offers, after a yes, no or already-completed answer, ask the next service in order.
 - Ask insurance even when registration and maintenance were both refused or the record says active.
 - Answer questions about any service first, while preserving the current offer and its unanswered status.
 - Do not arrange a date, close for refusals, or request booking until all three have been answered.
@@ -38,7 +38,7 @@ Priority: 1 registration renewal, 2 regular maintenance, 3 car insurance.
 --------------------------------------------------------
 3. COMPLETE EACH OFFER
 --------------------------------------------------------
-Registration, maintenance and insurance are separate offers, each asked once in order.
+Only after the combined opening is declined, registration, maintenance and insurance are separate offers, each asked once in order.
 Resolve only the current service. A request for just one service never adds the others to a booking;
 the remaining offers still need answers. Do not interpret silence or a question as acceptance.
 Explicit opt-outs, pauses and requests for a person stop progression without creating a booking.
