@@ -123,7 +123,8 @@ public class TmbgBookingAssistant {
 		String cached = session.replies.get(receiptId);
 		if (cached != null) return cached;
 		if (session.stage.equals("CONFIRMED")) return null;
-		if (content.toLowerCase(Locale.ROOT).matches("(?s).*\\b(po|opo|hindi|sige|oo|salamat|magkano|ano|gusto)\\b.*")) session.language = "tl";
+		session.language = content.toLowerCase(Locale.ROOT).matches(
+				"(?s).*\\b(po|opo|hindi|sige|oo|salamat|magkano|ano|anong|gusto|pwede|puwede|paki|ako|ko|kami|namin|ninyo|niyo|yung|iyong|sa|ng|na|lang|bukas|kailan|paano|wala|meron|ayoko|huwag|wag)\\b.*") ? "tl" : "en";
 		registrationStatus(session, content);
 		Map<String, Object> fields = fields(session, phone(channel, participant));
 		String reply;
@@ -135,6 +136,7 @@ public class TmbgBookingAssistant {
 			LOGGER.warn("Booking demo reply unavailable; using prepared template");
 			reply = fallback(session, fields);
 		}
+		if (session.language.equals("en")) reply = fullEnglish(reply);
 		session.replies.put(receiptId, reply);
 		session.history.add(Map.of("direction", "INBOUND", "content", content));
 		session.history.add(Map.of("direction", "OUTBOUND", "content", reply));
@@ -334,15 +336,16 @@ public class TmbgBookingAssistant {
 				.replaceFirst("^(?:(?:yes|okay|ok|sige|oo|opo|please) )+", "")
 				.replaceFirst("^(?:i(?:'d| would) like|i (?:want|prefer)|gusto ko(?: po)?)(?: to)?\\s+", "")
 				.replaceFirst("^(?:i(?:'ll| will) (?:take|choose)|let's (?:do|book)|i meant)\\s+", "")
+				.replaceFirst("^(?:i(?:'m| am) available|i can (?:come|visit)|my (?:choice|preferred date) is)(?: on)?\\s+", "")
 				.replaceFirst("^(?:(?:can|could|would) you (?:please )?)?(?:book|reserve|schedule|choose|select|paki-?book|pa-?book)(?: me| my (?:visit|appointment))?(?: po)?\\s+", "")
-				.replaceFirst("^(?:(?:for|on|sa|yung) )+", "")
-				.replaceFirst("(?: (?:po|please|na lang|instead|works for me|is fine|is good))+$", "")
+				.replaceFirst("^(?:(?:for|on|sa|yung|this|coming|the) )+", "")
+				.replaceFirst("(?: (?:po|please|na lang|instead|works for me|would work for me|works|would work|is fine|is good|na|lang))+$", "")
 				.replaceAll("\\s+(am|pm)\\b", "$1");
 		List<String> matches = new ArrayList<>();
 		for (var entry : session.slots.entrySet()) {
 			LocalDateTime slot = LocalDateTime.parse(entry.getValue());
 			String code = "(?:(?:option|slot|yung|letter) )?" + entry.getKey().toLowerCase(Locale.ROOT);
-			List<String> dates = new ArrayList<>(List.of(slot.toLocalDate().toString()));
+			List<String> dates = new ArrayList<>(List.of(slot.toLocalDate().toString(), Integer.toString(slot.getDayOfMonth())));
 			for (String format : List.of("MMM d", "MMMM d", "d MMM", "d MMMM", "M/d", "MM/dd", "d/M", "dd/MM")) {
 				String date = DateTimeFormatter.ofPattern(format, Locale.ENGLISH).format(slot).toLowerCase(Locale.ROOT);
 				dates.add(date);
@@ -403,7 +406,12 @@ public class TmbgBookingAssistant {
 		for (var field : fields.entrySet()) text = text.replace("{{" + field.getKey() + "}}", field.getValue().toString());
 		if (text.contains("{{")) return language.equals("tl") ? "Kukumpirmahin po ng TMBG advisor ang detalye."
 				: "A TMBG advisor can confirm that detail po.";
-		return text;
+		return language.equals("en") ? fullEnglish(text) : text;
+	}
+
+	private String fullEnglish(String text) {
+		return text.replaceAll("(?i)\\b(?:po|opo)\\b", "")
+				.replaceAll(" +([,.!?])", "$1").replaceAll(" {2,}", " ").trim();
 	}
 
 	private boolean validSms(String text) {

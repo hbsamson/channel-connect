@@ -31,7 +31,7 @@ The override changes only where SMS is sent. The assistant continues to use the 
 
 ## Conversation flow
 
-Every new SMS or Messenger conversation starts with the English `OPEN_GREETING`. Replies stay in English until the customer uses Tagalog or Taglish, then follow that language. Numbers, slot codes and unclear messages retain the current conversation language, defaulting to English. Existing sessions keep their language until a new campaign start or application restart.
+Every new SMS or Messenger conversation starts with the English `OPEN_GREETING`. Language is selected again on each turn: messages containing recognized Tagalog words use Taglish; English messages, numbers, slot letters and unclear text without Tagalog default back to full English. English replies omit `po` and `opo`, including service-generated confirmations and fallbacks.
 
 The service renders and sends `OPEN_GREETING` without an LLM call. Fresh replies from the demo participant use the supplied rules, templates, customer record, and conversation state instead of the legacy shared dealership workflow. Hosted inbox polling selects the latest fresh message by `received_at` for each demo account/participant, using the receive ID to break ties. Earlier messages in the snapshot remain available in the retained inbox without triggering replies.
 
@@ -40,6 +40,8 @@ The service merges the six context blocks and asks the LLM for one JSON response
 Choosing an offered slot (for example, `A`, `Book A please`, or an unambiguous offered date/time) confirms the customer's booking intent; no additional `Yes` is needed. A question, refusal, tentative date, or ambiguous choice does not create a booking. The service only ends the session after saving the booking successfully. A failed save leaves it open for another reply. Later inbound messages in a confirmed session are acknowledged internally without another LLM call or outgoing SMS.
 
 Slot letters are optional. Customers can choose an available appointment with wording such as `October 19 please`, `Monday works for me`, or `Sa October 19 na lang po`. A date with multiple offered times needs a time before it can be booked. Unavailable or ambiguous choices prompt clarification with the offered dates and times.
+
+Selections also accept a unique day of the month (`19th`), `I'm available on October 19`, `October 19 would work for me`, `this coming Monday`, or `option B is fine`. Customers need not copy the script. Choices must still identify one of the actual offered slots; questions, refusals and ambiguous dates do not create bookings.
 
 Conversation state is process-local. Restarting the application or calling the start endpoint resets the demo session. The existing SMS inbox and outbox keep their normal persistence and transmission rules.
 
