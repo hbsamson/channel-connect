@@ -77,8 +77,8 @@ class GoipHttpApiClientTests {
 	}
 
 	@Test
-	void springSelectsOnlyTheRemoteProviderAndDoesNotOpenUdpInHttpApiMode() {
-		new ApplicationContextRunner().withPropertyValues("sms.enabled=true", "sms.mode=HTTP_API", "sms.http-inbound.enabled=true")
+	void springSelectsOnlyTheRemoteProviderWithoutOptInUdpReception() {
+		new ApplicationContextRunner().withPropertyValues("sms.enabled=true", "sms.mode=HTTP_API", "sms.http-inbound.enabled=false")
 				.withBean(com.svi.channelconnect.sms.config.SmsProperties.class, () -> smsProperties(Map.of()))
 				.withBean(GoipHttpApiProperties.class, () -> apiProperties(1048576))
 				.withUserConfiguration(GoipHttpApiClient.class, GoipHttpApiSmsProvider.class, GoipHttpSmsProvider.class,

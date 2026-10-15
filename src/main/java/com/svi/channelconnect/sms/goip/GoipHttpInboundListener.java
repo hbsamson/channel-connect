@@ -9,6 +9,8 @@ import java.util.Set;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -22,8 +24,9 @@ import com.svi.channelconnect.sms.persistence.SmsMessageRepository;
 /** GoIP documents UDP reception even when outbound messages use its HTTP web form. */
 @Component
 @ConditionalOnProperty(name = {"sms.enabled", "sms.http-inbound.enabled"}, havingValue = "true")
-@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP'")
+@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP' || '${sms.mode:MOCK}' == 'HTTP_API'")
 public class GoipHttpInboundListener implements AutoCloseable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(GoipHttpInboundListener.class);
 	private final SmsProperties properties;
 	private final GoipRegistrationService registrations;
 	private final GoipInboundPacketHandler inbound;
@@ -42,7 +45,11 @@ public class GoipHttpInboundListener implements AutoCloseable {
 		Set<String> identities = new HashSet<>();
 		List<SmsProperties.Channel> channels = inboundProperties.channels().stream().map(credentials -> {
 			SmsProperties.Channel channel = properties.channel(credentials.accountId());
-			if (!identities.add(SmsProperties.address(channel.sourceAddress()).getHostAddress() + "/" + credentials.authId())) {
+			var sourceAddress = SmsProperties.address(channel.sourceAddress());
+			if (!sourceAddress.isSiteLocalAddress() && !sourceAddress.isLoopbackAddress()) {
+				throw new IllegalArgumentException("HTTP inbound SMS requires a private gateway source address");
+			}
+			if (!identities.add(sourceAddress.getHostAddress() + "/" + credentials.authId())) {
 				throw new IllegalArgumentException("HTTP inbound SMS requires a unique UDP authentication ID per gateway line");
 			}
 			return new SmsProperties.Channel(channel.accountId(), channel.deviceId(), channel.simChannel(), channel.sourceAddress(),
@@ -62,6 +69,7 @@ public class GoipHttpInboundListener implements AutoCloseable {
 		transport = new GoipUdpTransport(new InetSocketAddress(SmsProperties.address(properties.bindAddress()), properties.port()),
 				this::receive, metrics);
 		transport.start();
+		LOGGER.info("Direct GoIP SMS receiver started; channels={}, hostedReceivePolling=false", registrations.statuses().size());
 	}
 
 	private void receive(byte[] bytes, InetSocketAddress source) {

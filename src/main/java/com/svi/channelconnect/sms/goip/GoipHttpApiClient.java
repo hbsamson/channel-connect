@@ -30,7 +30,7 @@ import com.svi.channelconnect.sms.provider.SmsProvider;
 /** Implements the supplied Postman PHP gateway requests without retrying uncertain submissions. */
 @Component
 @ConditionalOnProperty(name = "sms.enabled", havingValue = "true")
-@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP_API' || ('${sms.mode:MOCK}' == 'HTTP' && ${sms.http-api.receive-enabled:false})")
+@ConditionalOnExpression("'${sms.mode:MOCK}' == 'HTTP_API' || ('${sms.mode:MOCK}' == 'HTTP' && ${sms.http-api.receive-enabled:false} && !${sms.http-inbound.enabled:false})")
 public class GoipHttpApiClient {
 	private final GoipHttpApiProperties properties;
 	private final SmsProperties smsProperties;

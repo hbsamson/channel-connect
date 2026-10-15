@@ -1,0 +1,58 @@
+{
+  "info": {
+    "name": "Channel Connect - WhatsApp Starter",
+    "description": "Send the hello_world starter template through the local application. One-time setup: set outboundLocalAuthToken to OUTBOUND_LOCAL_AUTH_TOKEN (not the Meta access token). Run with the local profile and include the recipient in OUTBOUND_ALLOWED_RECIPIENTS and hello_world in OUTBOUND_ALLOWED_TEMPLATES. The application uses WHATSAPP_ACCESS_TOKEN from its own configuration. Set recipient to an international number containing digits only, without + or spaces. The hello_world template in en_US must be available for the configured WhatsApp account. 202 means accepted by Meta, not delivered. No requests are sent automatically. Each Send creates a new submission unless idempotencyKey is explicitly set; set and reuse that key when retrying the same message.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8080" },
+    { "key": "outboundLocalAuthToken", "value": "" },
+    { "key": "recipient", "value": "" },
+    { "key": "idempotencyKey", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - Send WhatsApp starter to number",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.variables.get('outboundLocalAuthToken')) throw new Error('Set outboundLocalAuthToken to OUTBOUND_LOCAL_AUTH_TOKEN.');",
+              "if (!/^[1-9]\\d{7,14}$/.test(pm.variables.get('recipient') || '')) throw new Error('Set recipient to an international number: 8-15 digits, no + or spaces.');",
+              "if (!pm.variables.get('idempotencyKey')) pm.variables.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Starter accepted by provider', function () { pm.response.to.have.status(202); });",
+              "if (pm.response.code === 202) { pm.test('Provider message identifier returned', function () { pm.expect(pm.response.json().providerMessageId).to.be.a('string').and.not.empty; }); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{outboundLocalAuthToken}}", "type": "string" }]
+        },
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"recipient\": \"{{recipient}}\",\n  \"templateName\": \"hello_world\",\n  \"languageCode\": \"en_US\",\n  \"parameters\": []\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/whatsapp/messages"
+      }
+    }
+  ]
+}

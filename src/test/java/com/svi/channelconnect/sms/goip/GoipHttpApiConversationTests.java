@@ -84,6 +84,7 @@ class GoipHttpApiConversationTests {
 	}
 	@DynamicPropertySource
 	static void remoteGateway(DynamicPropertyRegistry properties) {
+		properties.add("sms.http-api.receive-enabled", () -> "true");
 		String base = "http://127.0.0.1:" + GATEWAY.getAddress().getPort();
 		properties.add("sms.http-api.send-url", () -> base + "/send.php");
 		properties.add("sms.http-api.receive-url", () -> base + "/receive.php");

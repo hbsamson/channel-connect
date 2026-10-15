@@ -9,6 +9,29 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 import com.svi.channelconnect.support.SmsTestProperties;
 
 class SmsPropertiesTests {
+	@Test void ownReceiveProfileReplacesHostedReceiveSettings() {
+		new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+				.withInitializer(new org.springframework.boot.test.context.ConfigDataApplicationContextInitializer())
+				.withPropertyValues("spring.config.location=classpath:/application-sms-http-api.properties,classpath:/application-sms-own-receive.properties",
+						"SMS_GOIP_IPADDRESS=192.168.1.20", "SMS_UDP_BIND_ADDRESS=192.168.1.21", "SMS_UDP_PORT=44444",
+						"SMS_GOIP_UDP_ID=synthetic-line-1", "SMS_GOIP_UDP_PASSWORD=synthetic-password",
+						"SMS_GOIP_API_RECEIVE_URL=https://example.invalid/receive", "SMS_GOIP_API_RECEIVE_KEY=unused")
+				.run(context -> {
+					var binder = Binder.get(context.getEnvironment());
+					var sms = binder.bind("sms", SmsProperties.class).get();
+					var inbound = binder.bind("sms.http-inbound", GoipHttpInboundProperties.class).get();
+					var api = binder.bind("sms.http-api", GoipHttpApiProperties.class).get();
+					assertThat(sms.mode()).isEqualTo(SmsProperties.Mode.HTTP_API);
+					assertThat(sms.channels()).allMatch(channel -> channel.sourceAddress().equals("192.168.1.20"));
+					assertThat(inbound.enabled()).isTrue();
+					assertThat(inbound.channels()).containsExactly(new GoipHttpInboundProperties.ChannelCredentials(
+							"goip-line-1", "synthetic-line-1", "synthetic-password"));
+					assertThat(api.receiveUrl()).isNull();
+					assertThat(api.receiveKey()).isEmpty();
+					assertThat(context.getEnvironment().getProperty("sms.http-api.receive-enabled", Boolean.class)).isFalse();
+				});
+	}
+
 	@Test void providerProfileOverridesLocalEnvironmentDefaults(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
 		java.nio.file.Path environmentFile = directory.resolve(".env");
 		java.nio.file.Files.writeString(environmentFile, "SMS_ENABLED=true\nSMS_PROVIDER_MODE=MOCK\nSMS_LIVE_AUTHORIZED=false\n");

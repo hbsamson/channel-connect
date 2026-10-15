@@ -10,15 +10,22 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 
 import com.svi.channelconnect.common.dto.OutgoingMessageDTO;
 import com.svi.channelconnect.common.dto.SendMessageResponseDTO;
 import com.svi.channelconnect.dealership.service.TmbgBookingAssistant;
 import com.svi.channelconnect.messenger.client.MessengerSendClient;
+import com.svi.channelconnect.messenger.config.MessengerProperties;
 import com.svi.channelconnect.messenger.dto.IncomingMessageDTO;
 import com.svi.channelconnect.messenger.exception.ProviderException;
 
@@ -27,6 +34,32 @@ class MessengerTmbgDemoServiceTests {
 	private final TmbgBookingAssistant assistant = mock(TmbgBookingAssistant.class);
 	private final MessengerSendClient sender = mock(MessengerSendClient.class);
 	private final MessengerTmbgDemoService demo = new MessengerTmbgDemoService(assistant, sender);
+
+	@Test
+	void advancesAfterGreetingAcknowledgedAsJavascriptInsteadOfResendingIt() {
+		RestClient.Builder builder = RestClient.builder();
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		var client = new MessengerSendClient(builder, new MessengerProperties("secret", "verify", "token", "page-1", "v99.0", 10));
+		var service = new MessengerTmbgDemoService(assistant, client);
+		when(assistant.reply("MESSENGER", "page-1", "person-1", "mid-1", "Hello")).thenReturn("Hello po!");
+		when(assistant.reply("MESSENGER", "page-1", "person-1", "mid-2", "sige ano yon"))
+				.thenReturn("Has your registration been renewed this year po?");
+		for (String reply : new String[] {"Hello po!", "Has your registration been renewed this year po?"}) {
+			server.expect(requestTo("https://graph.facebook.com/v99.0/page-1/messages"))
+					.andExpect(content().json("{\"message\":{\"text\":\"" + reply + "\"}}"))
+					.andRespond(withSuccess("{\"message_id\":\"mid.reply\"}", MediaType.parseMediaType("text/javascript")));
+		}
+
+		service.process(incoming("page-1", "person-1", "mid-1"));
+		service.process(new IncomingMessageDTO("MESSENGER", "page-1", "mid-2", "person-1", "page-1",
+				"sige ano yon", "TEXT", Instant.EPOCH));
+		service.process(incoming("page-1", "person-1", "mid-1"));
+
+		verify(assistant).reply("MESSENGER", "page-1", "person-1", "mid-1", "Hello");
+		verify(assistant).reply("MESSENGER", "page-1", "person-1", "mid-2", "sige ano yon");
+		verifyNoMoreInteractions(assistant);
+		server.verify();
+	}
 
 	@Test
 	void forwardsThePreparedGreetingToTheMessengerParticipant() {

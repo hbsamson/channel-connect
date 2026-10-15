@@ -21,7 +21,7 @@ import com.svi.channelconnect.messenger.exception.ProviderException;
 @Component
 public class MessengerSendClient {
     private static final Logger LOGGER = LoggerFactory.getLogger(MessengerSendClient.class);
-    private static final JsonMapper ERROR_MAPPER = JsonMapper.builder().build();
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
     private final RestClient client;
     private final MessengerProperties properties;
 
@@ -36,7 +36,7 @@ public class MessengerSendClient {
             throw new IllegalArgumentException("Recipient and content are required");
         }
         try {
-            JsonNode response = client.post()
+            byte[] responseBody = client.post()
                     .uri("/{version}/{pageId}/messages", properties.graphApiVersion(), properties.pageId())
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.pageAccessToken())
                     .contentType(MediaType.APPLICATION_JSON)
@@ -44,7 +44,15 @@ public class MessengerSendClient {
                             "messaging_type", "RESPONSE",
                             "message", Map.of("text", message.content())))
                     .retrieve()
-                    .body(JsonNode.class);
+                    .body(byte[].class);
+            // Meta can return JSON as text/javascript. Read bytes so a successful send
+            // is not mistaken for a transport failure because of its media type.
+            JsonNode response;
+            try {
+                response = responseBody == null || responseBody.length == 0 ? null : JSON_MAPPER.readTree(responseBody);
+            } catch (RuntimeException exception) {
+                throw new ProviderException("messenger", "invalid_response", exception);
+            }
             String messageId = response == null ? null : response.path("message_id").asText(null);
             if (messageId == null || messageId.isBlank()) {
                 throw new ProviderException("messenger", "invalid_response", null);
@@ -56,7 +64,7 @@ public class MessengerSendClient {
                     : status == 429 ? "rate_limit" : status >= 500 ? "server" : "provider";
             JsonNode error = null;
             try {
-                error = ERROR_MAPPER.readTree(exception.getResponseBodyAsString()).path("error");
+                error = JSON_MAPPER.readTree(exception.getResponseBodyAsString()).path("error");
             } catch (RuntimeException ignored) {
                 // Non-JSON provider errors still retain their HTTP status and original cause.
             }

@@ -14,7 +14,8 @@ For the supplied [TMBG 3-in-1 SMS demo](tmbg-sms-demo.md), keep the existing SMS
 | --- | --- | --- |
 | `application-sms-http.properties` | Send through the gateway's web form, SIM 1 | `SMS_GOIP_IPADDRESS`, `SMS_GOIP_USER`, `SMS_GOIP_PASS`, `SMS_API_TOKEN` |
 | `application-sms-http-two-lines.properties` | Same web form, SIMs 1 and 2 | Same settings as `sms-http`; replaces that profile |
-| `application-sms-http-api.properties` | Hosted PHP send API and continuous inbox polling | `SMS_GOIP_API_SEND_URL`, `SMS_GOIP_API_RECEIVE_URL`, `SMS_GOIP_API_RECEIVE_KEY`, `SMS_GOIP_GATEWAY_ID`, `SMS_API_TOKEN` |
+| `application-sms-http-api.properties` | Hosted PHP send API; hosted reception is opt-in | `SMS_GOIP_API_SEND_URL`, `SMS_GOIP_GATEWAY_ID`, `SMS_API_TOKEN` |
+| `application-sms-own-receive.properties` | Add after the sender profile to receive directly from GoIP over UDP | `SMS_GOIP_IPADDRESS`, `SMS_UDP_BIND_ADDRESS`, `SMS_UDP_PORT`, `SMS_GOIP_UDP_ID`, `SMS_GOIP_UDP_PASSWORD`; two-line sender also requires `SMS_GOIP_UDP_ID_2`, `SMS_GOIP_UDP_PASSWORD_2` |
 | `application-sms-mock.properties` | Loopback UDP simulator; no physical gateway | `SMS_MOCK_AUTH_ID`, `SMS_MOCK_PASSWORD`, `SMS_API_TOKEN` |
 
 For direct gateway testing, set `SMS_LIVE_AUTHORIZED=true` in `.env` and use `--spring.profiles.active=local,sms-http`. The two-line and hosted API modes also require live authorization. An IDE environment-file loader or an existing operating-system environment variable can override the profile's authorization default. If the error still says `HTTP requires live-authorized=true`, remove a stale `SMS_LIVE_AUTHORIZED=false` from the IntelliJ run configuration or its inherited environment and restart. There is no need to activate `demo` or use a launcher script.
@@ -90,7 +91,33 @@ Hourly transmission attempts and minimum send intervals are persisted. Queue lim
 
 Content cleanup removes completed SMS content from the SMS tables and their dealership history copies. Completed inbox/outbox IDs expire after ID retention, allowing later ID reuse. **Unknown outbound idempotency tombstones remain indefinitely**, with content removed after content retention, so expiry cannot authorize an uncertain resend. Dead-letter content has the same configured retention; resolve or export failures before expiry. Protect the database volume and backups, and plan disk capacity for retained tombstones.
 
-## Use the hosted GoIP8 Postman API
+## Receive through this application's API
+
+Use `local,sms-http,sms-own-receive` for direct web-form sending and application-owned reception, `local,sms-http-two-lines,sms-own-receive` for SIMs 1 and 2, or `local,sms-http-api,sms-own-receive` to retain the hosted sender. The last profile disables hosted receive polling and clears its receive URL/key. Enabling direct reception also prevents the hosted poller from starting even if `SMS_GOIP_API_RECEIVE_ENABLED=true` remains in the environment. Incoming SMS is authenticated and persisted by this application's existing GoIP UDP receiver; `/api/v1/sms/receive` and `/api/v1/sms/receive-all` read that local inbox without calling smsgateway. Their authentication, filters, response bodies, and cursors are unchanged.
+
+Set these values privately in `.env` (alongside the sender settings and `SMS_API_TOKEN`):
+
+```properties
+SMS_GOIP_IPADDRESS=<gateway private IP>
+SMS_UDP_BIND_ADDRESS=<this application's private interface IP>
+SMS_UDP_PORT=<nonzero UDP listening port>
+SMS_GOIP_UDP_ID=<SIM 1 SMS-server ID>
+SMS_GOIP_UDP_PASSWORD=<SIM 1 SMS-server password>
+```
+
+Configure the gateway's SIM 1 SMS-server destination to the application's IP and UDP port with the same ID/password, and allow that UDP traffic through the firewall. These credentials are independent of the web login. The supplied GoIP interface defines UDP registration and `RECEIVE` packets, rather than an HTTP inbox endpoint. This change does not reconfigure the physical device. Existing messages held only by smsgateway are not imported; previously retained local messages remain available.
+
+With `sms-http-two-lines`, the convenience profile receives both SIMs. Also set `SMS_GOIP_UDP_ID_2` and `SMS_GOIP_UDP_PASSWORD_2` to SIM 2's SMS-server credentials; each SIM must have a distinct ID on the gateway. Both lines target the same application UDP address and port. Start with:
+
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local,sms-http-two-lines,sms-own-receive"
+```
+
+For other sender profiles the convenience profile receives SIM 1. To receive additional SIMs with `sms-http-api`, supply the complete `sms.http-inbound.channels` list through external Spring configuration as illustrated below. Spring replaces configuration lists rather than merging entries across sources. All sender profiles use `SMS_GOIP_IPADDRESS` for the gateway source address. Only configured inbound SIMs are received. Startup logs `Direct GoIP SMS receiver started`; channel availability still requires authenticated GoIP registration. An empty inbox before a new gateway receipt is expected.
+
+## Legacy opt-in hosted GoIP8 Postman API
+
+Hosted reception now requires `SMS_GOIP_API_RECEIVE_ENABLED=true` in both `HTTP` and `HTTP_API` modes. It is disabled by default; use the application-owned receiver above to remove the smsgateway receive dependency.
 
 The operator's supplied collection uses two hosted PHP endpoints. `HTTP_API` mode follows its request format exactly:
 
@@ -169,7 +196,7 @@ Supply additional mock channel entries through external configuration/`SPRING_AP
 
 ## Application API and Postman
 
-Import [the SMS application Postman collection](postman/goip-sms-local.postman_collection.json). It contains only send, receive, and receive-all. Set `smsApiToken` to `SMS_API_TOKEN`, `testRecipient` to an approved mobile number, and `accountId` to `goip-line-1` (or the configured SIM). Postman variables are separate from the application's `.env`. Leave `idempotencyKey` blank for a new key per send, or set an explicit key for a retry. `receiveCursor` tracks new-message polling; the separate `inboxCursor` starts at `0` and does not advance automatically. Set it manually to `nextCursor` to browse another history page when `hasMore=true`.
+Import [the SMS application Postman collection](postman/goip-sms-local.postman_collection.json). It contains only send, receive, and receive-all. Set `smsApiToken` to `SMS_API_TOKEN`, `recipient` directly in the send request body to the destination mobile number, and `accountId` to `goip-line-1` (or the configured SIM). Postman variables are separate from the application's `.env`. Leave `idempotencyKey` blank for a new key per send, or set an explicit key for a retry. `receiveCursor` tracks new-message polling; the separate `inboxCursor` starts at `0` and does not advance automatically. Set it manually to `nextCursor` to browse another history page when `hasMore=true`.
 
 Submit `POST /api/v1/sms/send` (or the compatible `/api/v1/sms/messages`), using `Authorization: Bearer <SMS_API_TOKEN>`, `Idempotency-Key: <stable request key>`, and JSON:
 

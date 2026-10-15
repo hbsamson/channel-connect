@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Channel Connect - SMS API",
-    "description": "Only SMS send and receive requests against Channel Connect. Set smsApiToken to SMS_API_TOKEN, testRecipient to the approved mobile number, and accountId to the configured SIM for send and new-message polling. Receive-all lists retained application inbox history across configured SIMs; optionally add accountId or sender. It returns bounded pages: set inboxCursor manually to nextCursor for the next page when hasMore=true; leave it at 0 to keep viewing the start of the inbox. It never advances automatically. receiveCursor is separate and tracks new-message polling. The local inbox includes only imported messages with retained content, not the entire remote gateway inbox. HTTP web-form sending can use hosted inbox polling with SMS_GOIP_API_RECEIVE_ENABLED=true and the configured receive URL/key, or a separate UDP listener. 202 means queued, not delivered.",
+    "description": "Only SMS send and receive requests against Channel Connect. Set smsApiToken to SMS_API_TOKEN, edit recipient directly in the send request JSON body, and set accountId to the configured SIM for send and new-message polling. Receive-all lists retained application inbox history across configured SIMs; optionally add accountId or sender. It returns bounded pages: set inboxCursor manually to nextCursor for the next page when hasMore=true; leave it at 0 to keep viewing the start of the inbox. It never advances automatically. receiveCursor is separate and tracks new-message polling. The local inbox contains messages retained by Channel Connect. Add sms-own-receive after sms-http or sms-http-api to receive directly from GoIP through this application, without smsgateway polling. Configure the gateway SMS-server destination to the application UDP address/port and matching per-SIM credentials; see docs/goip-sms.md. Historic messages held only by the remote gateway are unavailable through this mode. 202 means queued, not delivered.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -12,10 +12,6 @@
     {
       "key": "accountId",
       "value": "goip-line-1"
-    },
-    {
-      "key": "testRecipient",
-      "value": ""
     },
     {
       "key": "smsApiToken",
@@ -47,7 +43,6 @@
           "script": {
             "exec": [
               "if (!pm.variables.get(\"smsApiToken\")) throw new Error(\"Set smsApiToken to SMS_API_TOKEN.\");",
-              "if (!pm.variables.get(\"testRecipient\")) throw new Error(\"Set testRecipient to the approved mobile number.\");",
               "if (!pm.variables.get(\"idempotencyKey\")) pm.variables.set(\"idempotencyKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
             ],
             "type": "text/javascript"
@@ -88,7 +83,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"recipient\": \"{{testRecipient}}\",\n  \"content\": \"GoIP SMS test\"\n}"
+          "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"recipient\": \"\",\n  \"content\": \"GoIP SMS test\"\n}"
         },
         "url": "{{baseUrl}}/api/v1/sms/send"
       }

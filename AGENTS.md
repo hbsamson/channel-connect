@@ -4,14 +4,13 @@
 
 This is a single-module Java 25 Spring Boot application built with Maven. Production code lives under `src/main/java/com/svi/channelconnect/` and is organized by feature. Keep WhatsApp HTTP, orchestration, Meta integration, DTOs, models, security, and configuration under `whatsapp/`. Keep the channel-neutral AI boundary and adapters under `ai/`; that package must not depend on WhatsApp. Put only genuinely cross-feature types under `common/`. Keep `ChannelConnectApplication` and the shared `MessagingAppHandler` directly under the root package, with channel-specific implementations in sibling `whatsapp/` and `messenger/` folders. Tests mirror the main package tree, with shared test factories under `com.svi.channelconnect.support` and webhook fixtures in `src/test/resources/fixtures/whatsapp/`.
 
-## Build, Test, and Development Commands
+## Build and Development Commands
 
 Use the checked-in Maven wrapper so contributors share the same Maven version.
 
 - `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` (Windows: `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"`) starts the local in-memory service.
-- `./mvnw test` runs the JUnit test suite and Spring context checks.
-- `./mvnw clean verify` performs a clean compilation and all verification steps.
-- `./mvnw package` creates the executable JAR in `target/`.
+- `./mvnw compile` compiles production code without running tests.
+- `./mvnw -Dmaven.test.skip=true package` creates the executable JAR in `target/` without compiling or running tests.
 
 Run commands from the repository root. Do not commit generated `target/` content.
 
@@ -21,7 +20,7 @@ Follow standard Java naming: `PascalCase` for classes and interfaces, `camelCase
 
 ## Testing Guidelines
 
-Tests use JUnit Jupiter, Mockito, MockMvc, and mocked HTTP boundaries. Name test classes with the `Tests` suffix and methods for behavior, for example `rejectsInvalidWebhookSignature()`. Add focused tests for services, clients, mappers, concurrency, and signature validation; reserve `@SpringBootTest` for application wiring. Tests must not need real Meta or OpenAI credentials.
+Do not create, add, or modify tests, and do not run any tests, unless the user explicitly requests that work. This applies to bug fixes, features, refactors, and verification. Do not run Maven goals or other commands that execute tests indirectly; when packaging, use `-Dmaven.test.skip=true`. Verify changes through code review and production compilation when appropriate, and state that tests were not run under this repository policy. This policy takes precedence over testing recommendations in skills and other repository guidance.
 
 ## Commit & Pull Request Guidelines
 

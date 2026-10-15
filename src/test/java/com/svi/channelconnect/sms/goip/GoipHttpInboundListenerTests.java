@@ -67,6 +67,28 @@ class GoipHttpInboundListenerTests {
 	}
 
 	@Test
+	void hostedSenderUsesOwnReceiverWithoutCreatingHostedReceivePoller() {
+		context().withBean(GoipHttpApiClient.class, () -> mock(GoipHttpApiClient.class))
+				.withUserConfiguration(GoipHttpApiSmsProvider.class, GoipHttpApiReceivePoller.class)
+				.withPropertyValues("sms.enabled=true", "sms.mode=HTTP_API", "sms.http-inbound.enabled=true")
+				.run(context -> {
+					assertThat(context).hasSingleBean(SmsProvider.class).hasSingleBean(GoipHttpInboundListener.class)
+							.doesNotHaveBean(GoipHttpApiReceivePoller.class);
+					assertThat(context.getBean(SmsProvider.class)).isInstanceOf(GoipHttpApiSmsProvider.class);
+				});
+	}
+
+	@Test
+	void staleHostedReceiveSettingsDoNotEnablePolling() {
+		context().withBean(GoipHttpApiClient.class, () -> mock(GoipHttpApiClient.class))
+				.withUserConfiguration(GoipHttpApiSmsProvider.class, GoipHttpApiReceivePoller.class)
+				.withPropertyValues("sms.enabled=true", "sms.mode=HTTP_API", "sms.http-api.receive-enabled=false",
+						"sms.http-api.receive-url=https://example.invalid/receive", "sms.http-api.receive-key=unused")
+				.run(context -> assertThat(context).hasSingleBean(GoipHttpApiSmsProvider.class)
+						.doesNotHaveBean(GoipHttpApiReceivePoller.class).doesNotHaveBean(GoipHttpInboundListener.class));
+	}
+
+	@Test
 	void httpReceiveListenerRemainsDisabledUntilExplicitlyEnabled() {
 		context().withPropertyValues("sms.enabled=true", "sms.mode=HTTP")
 				.run(context -> assertThat(context).hasSingleBean(GoipHttpSmsProvider.class)
