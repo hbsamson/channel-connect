@@ -1,0 +1,77 @@
+{
+  "_note": "Every price is an estimate and is always said as an estimate (around, usually, estimated); never as an exact quote. The three services, in the order they are offered. The service layer uses this to fill price fields and to decide which service to offer next.",
+  "version": "v1",
+  "services": [
+    {
+      "id": "pms",
+      "priority": 1,
+      "name_en": "regular maintenance",
+      "name_tl": "regular maintenance",
+      "what_it_is": "Regular maintenance (PMS) of the car at the branch.",
+      "price": {
+        "basis": "5,000 km service. For another km reading, the advisor confirms the amount.",
+        "confirmed": false,
+        "bands": [
+          {
+            "id": "standard",
+            "applies_to": "Standard passenger cars and small SUVs, for example Vios, Wigo, Raize.",
+            "low": 1500,
+            "high": 2500,
+            "plus": false,
+            "text": "PHP 1,500 to 2,500",
+            "note": "Basic parts and labor with standard oil."
+          },
+          {
+            "id": "large_or_hybrid",
+            "applies_to": "Larger diesel vehicles and hybrids, for example Fortuner, Innova, Zenix.",
+            "low": 3000,
+            "high": 5500,
+            "plus": true,
+            "text": "PHP 3,000 to 5,500+",
+            "note": "Final amount depends on the model, engine and oil grade."
+          }
+        ],
+        "if_model_unknown": "Say the advisor will confirm the amount for the car."
+      },
+      "offer_when": "Always the first service offered, unless the customer starts with another service.",
+      "skip_when": ["The customer says the car was just serviced.", "The customer declined it."],
+      "wording_by_service_state": {
+        "due_soon": "coming up for its regular maintenance",
+        "overdue": "due for its regular maintenance",
+        "stopped": "We would love to see your car again. Never say it has been a long time or blame the customer.",
+        "never_serviced_here": "We can take care of the regular maintenance."
+      }
+    },
+    {
+      "id": "insurance",
+      "priority": 2,
+      "name_en": "car insurance",
+      "name_tl": "car insurance",
+      "what_it_is": "Full-coverage car insurance (comprehensive). The required basic insurance (CTPL) is separate: it is renewed together with the registration and is part of the registration renewal.",
+      "price": {
+        "source_file": "insurance_prices.json",
+        "if_range_missing": "Say the advisor will confirm the price. Never quote the previous premium as the new price.",
+        "confirmed": false
+      },
+      "offer_when": "After maintenance has been accepted, declined or skipped. Offer when comp_status is lapsed or unknown, or when comp_expiry_date is within the date range set in insurance_prices.json (offer_if_expiring_within_days). If that threshold is null, ask whether the insurance is still active or near expiry; do not invent a threshold or assume renewal is due.",
+      "skip_when": ["comp_status is active and not close to ending.", "The customer says it is still active or already renewed.", "The customer declined it."],
+      "always_say": "The insurance company still has to approve it."
+    },
+    {
+      "id": "renewal",
+      "priority": 3,
+      "name_en": "registration renewal",
+      "name_tl": "registration renewal",
+      "what_it_is": "Renewal of the car's registration, with the required basic insurance (CTPL) renewed together with it.",
+      "price": {
+        "service_fee": 1250,
+        "text": "PHP 1,250",
+        "extra": "LTO charges are extra, at actual cost, and fixed by law. They cannot be discounted.",
+        "confirmed": false
+      },
+      "offer_when": "After maintenance and insurance have been accepted, declined or skipped. Always give the renewal period (start to end), never one chosen date.",
+      "skip_when": ["The customer says it is already renewed.", "The customer declined it."],
+      "expired_registration": "If the renewal period has passed or the customer says it expired, never book a drive-in. Follow the expired-registration rules."
+    }
+  ]
+}

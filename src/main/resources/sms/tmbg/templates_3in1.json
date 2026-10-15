@@ -1,108 +1,208 @@
 {
-  "_note": "Placeholders in double braces are filled by the service from the customer record and derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL).",
-  "version": "v3",
+  "_note": "Placeholders in double braces are filled by the service from the customer record, the service catalog and the derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL). No template asks the customer to reply with a code, number or letter. Every price or fee is an estimate: always say around, usually or estimated, never quote it as exact. You may lightly reword a template to sound natural, but never change a number, date, fee, price, time or branch name.",
+  "version": "v5",
   "templates": [
     {
       "id": "OPEN_GREETING",
       "scenario": "First outbound SMS (greeting)",
-      "when": "Sent by the campaign sender, once. Says who we are and what it is about, gives the opt-out, and asks permission to ask. No dates, fees or questions about the car yet.",
+      "when": "Sent once by the campaign sender. Identify the AI assistant and open with one natural maintenance question. No reply instructions or opt-out footer.",
       "used_by": "campaign_sender",
-      "en": "Hi {{first_name}}! AI assistant of Toyota Manila Bay here, about your {{model_or_plate}}. May I ask a quick question? STOP to opt out.",
-      "tl": "Hello po, {{first_name}}! AI assistant po ng Toyota Manila Bay, tungkol sa {{model_or_plate}} ninyo. May itatanong lang po. STOP para mag-opt out."
-    },
-    {
-      "id": "REG_STATUS_ASK",
-      "scenario": "Registration question",
-      "when": "Owner replied to the greeting (hello, yes, sige) without answering anything yet. This is the first question.",
-      "used_by": "assistant",
-      "en": "Thank you po! Has your registration been renewed this year? Just tell us, or reply 1=Yes 2=Not yet 3=Not sure.",
-      "tl": "Salamat po! Na-renew na po ba ang registration ninyo ngayong taon? Sabihin lang po, o reply 1=Oo 2=Hindi pa 3=Hindi sigurado."
+      "en": "Hi {{first_name}}! I'm Toyota Manila Bay's AI assistant. May I help with your car's regular maintenance?",
+      "tl": "Hello po, {{first_name}}! AI assistant po ako ng Toyota Manila Bay. Gusto po ba ninyo ng tulong sa regular maintenance ng sasakyan?"
     },
     {
       "id": "ID_WRONG_PERSON",
       "scenario": "Not the named owner",
       "when": "Owner says they are not the named person.",
       "used_by": "assistant",
-      "en": "Sorry po for the trouble. Do you know how we can reach {{first_name}}? If not, we will remove this number from our list.",
-      "tl": "Pasensya na po sa abala. May alam po ba kayong paraan para maabot si {{first_name}}? Kung wala, aalisin na po namin ang number na ito sa listahan."
+      "en": "Sorry for the mix-up. I won't send further messages in this conversation.",
+      "tl": "Pasensya na po sa abala. Hindi na po ako magme-message sa usapang ito."
+    },
+    {
+      "id": "PMS_OFFER_DUE_SOON",
+      "scenario": "Service 1: regular maintenance, service_state = due_soon",
+      "when": "Customer replied to the greeting. First offer.",
+      "used_by": "assistant",
+      "en": "Your car is coming up for regular maintenance. Would you like help finding a time?",
+      "tl": "Malapit na pong due sa regular maintenance ang sasakyan ninyo. Gusto po ba ninyo ng tulong sa paghahanap ng oras?"
+    },
+    {
+      "id": "PMS_OFFER_OVERDUE",
+      "scenario": "Service 1: regular maintenance, service_state = overdue",
+      "when": "Customer replied to the greeting. First offer. Never blame the customer.",
+      "used_by": "assistant",
+      "en": "We can help with your car's regular maintenance. Would you like me to find a time?",
+      "tl": "Matutulungan po namin kayo sa regular maintenance ng sasakyan. Hahanapan ko po ba kayo ng oras?"
+    },
+    {
+      "id": "PMS_OFFER_RETURNING",
+      "scenario": "Service 1: regular maintenance, service_state = stopped",
+      "when": "Customer replied to the greeting. Serviced here before, not recently. Never blame the customer or say it has been a long time.",
+      "used_by": "assistant",
+      "en": "We'd be happy to help with your car's regular maintenance again. Would you like me to find a time?",
+      "tl": "Masaya po kaming asikasuhin ulit ang regular maintenance ng sasakyan ninyo. Hahanapan ko po ba kayo ng oras?"
+    },
+    {
+      "id": "PMS_OFFER_FIRST",
+      "scenario": "Service 1: regular maintenance, service_state = never_serviced_here",
+      "when": "Customer replied to the greeting. First offer.",
+      "used_by": "assistant",
+      "en": "We can take care of your car's regular maintenance. Would you like me to find a time?",
+      "tl": "Pwede po naming asikasuhin ang regular maintenance ng sasakyan ninyo. Hahanapan ko po ba kayo ng oras?"
+    },
+    {
+      "id": "PMS_PRICE_INFO",
+      "scenario": "Customer asks how much the maintenance is",
+      "when": "Estimate only. If pms_price is null, use the fallback.",
+      "used_by": "assistant",
+      "en": "For the 5,000 km service, the estimate is around {{pms_price}}. For your car's current km reading, an advisor confirms the final amount.",
+      "tl": "Para sa 5,000 km service, around {{pms_price}} po ang estimate. Para sa kasalukuyang km ng sasakyan, advisor po ang magkukumpirma ng final na halaga.",
+      "fallback_en": "An advisor needs to confirm the maintenance estimate for your car and current km reading.",
+      "fallback_tl": "Advisor po ang magkukumpirma ng maintenance estimate para sa sasakyan at kasalukuyang km nito."
+    },
+    {
+      "id": "PMS_KM_ASK",
+      "scenario": "Ask how many km are on the car",
+      "when": "Optional. Only if it helps give a closer estimate. Do not require an answer.",
+      "used_by": "assistant",
+      "en": "If you like, tell me how many km is on your car now. That helps us give a closer estimate.",
+      "tl": "Kung okay po, ilan na po ang km ng sasakyan ninyo ngayon? Makakatulong po ito para mas malapit ang estimate namin."
+    },
+    {
+      "id": "INSURANCE_OFFER_EXPIRING",
+      "scenario": "Service 2: car insurance, comp_status = active and ending soon",
+      "when": "After maintenance is accepted, declined or skipped. Price is a range from the insurance price file. Never quote the old premium.",
+      "used_by": "assistant",
+      "en": "Your car insurance ends on {{comp_expiry_date}}. We can get you a renewal quote, usually around {{insurance_price}}. The insurance company still has to approve it. Want us to start?",
+      "tl": "Matatapos po ang car insurance ninyo sa {{comp_expiry_date}}. Pwede po kaming kumuha ng renewal quote, karaniwan po ay around {{insurance_price}}. Aprubahan pa po ito ng insurance company. Gusto po ba ninyong simulan namin?",
+      "fallback_en": "An advisor can confirm a car insurance estimate. The insurance company still has to approve it. Would you like to discuss insurance?",
+      "fallback_tl": "Advisor po ang magkukumpirma ng estimate sa car insurance. Kailangan pa rin ng approval ng insurance company. Gusto po ninyong pag-usapan ang insurance?"
+    },
+    {
+      "id": "INSURANCE_OFFER_LAPSED",
+      "scenario": "Service 2: car insurance, comp_status = lapsed",
+      "when": "After maintenance is accepted, declined or skipped. Do not scold.",
+      "used_by": "assistant",
+      "en": "It looks like your car insurance has ended. We can get you a new quote, usually around {{insurance_price}}. The insurance company still has to approve it. Want us to start?",
+      "tl": "Mukhang tapos na po ang car insurance ninyo. Pwede po kaming kumuha ng bagong quote, karaniwan po ay around {{insurance_price}}. Aprubahan pa po ito ng insurance company. Gusto po ba ninyong simulan namin?",
+      "fallback_en": "An advisor can confirm a car insurance estimate. The insurance company still has to approve it. Would you like to discuss insurance?",
+      "fallback_tl": "Advisor po ang magkukumpirma ng estimate sa car insurance. Kailangan pa rin ng approval ng insurance company. Gusto po ninyong pag-usapan ang insurance?"
+    },
+    {
+      "id": "INSURANCE_ASK_STATUS",
+      "scenario": "Service 2: car insurance, comp_status = unknown",
+      "when": "After maintenance is accepted, declined or skipped.",
+      "used_by": "assistant",
+      "en": "Is your car insurance still active? If it is ending soon, we can get you a renewal quote.",
+      "tl": "Active pa po ba ang car insurance ninyo? Kung matatapos na po ito, pwede po kaming kumuha ng renewal quote."
+    },
+    {
+      "id": "INSURANCE_PRICE_INFO",
+      "scenario": "Customer asks how much the insurance is",
+      "when": "Range only. Never the old premium. Never promise approval.",
+      "used_by": "assistant",
+      "en": "Car insurance is usually around {{insurance_price}}, depending on your car. The insurance company still has to approve it, and our advisor will confirm the final amount.",
+      "tl": "Ang car insurance po ay karaniwang around {{insurance_price}}, depende sa sasakyan. Aprubahan pa po ito ng insurance company, at kukumpirmahin ng advisor ang final na halaga.",
+      "fallback_en": "An advisor can confirm a car insurance estimate. The insurance company still has to approve it. Would you like to discuss insurance?",
+      "fallback_tl": "Advisor po ang magkukumpirma ng estimate sa car insurance. Kailangan pa rin ng approval ng insurance company. Gusto po ninyong pag-usapan ang insurance?"
+    },
+    {
+      "id": "RENEWAL_ASK_STATUS",
+      "scenario": "Service 3: registration renewal, before the offer",
+      "when": "Maintenance and insurance are done or skipped, and we do not know if the registration was renewed this year.",
+      "used_by": "assistant",
+      "en": "Has your car's registration been renewed this year?",
+      "tl": "Na-renew na po ba ang registration ng sasakyan ninyo ngayong taon?"
+    },
+    {
+      "id": "RENEWAL_NOT_SURE",
+      "scenario": "Customer is not sure about the registration",
+      "when": "Give the renewal period and ask if they already did it.",
+      "used_by": "assistant",
+      "en": "No worries! Your car's renewal period is {{reg_window_start}} to {{reg_window_end}}. Have you already renewed it this year?",
+      "tl": "Okay lang po! Ang renewal period ng sasakyan ninyo ay {{reg_window_start}} hanggang {{reg_window_end}}. Na-renew na po ba ninyo ngayong taon?"
+    },
+    {
+      "id": "RENEWAL_OFFER_UPCOMING",
+      "scenario": "Service 3: registration renewal, period not open yet",
+      "when": "Window status is upcoming. Give the period, never one chosen date.",
+      "used_by": "assistant",
+      "en": "Your renewal period is {{reg_window_start}} to {{reg_window_end}}. Our fee is estimated at {{reg_service_fee}}, plus actual LTO charges; an advisor confirms the total. Would you like help?",
+      "tl": "Ang renewal period po ninyo ay {{reg_window_start}} hanggang {{reg_window_end}}. Estimated na {{reg_service_fee}} po ang fee namin, bukod sa actual LTO charges; advisor ang magko-confirm ng total. Gusto po ninyo ng tulong?",
+      "fallback_en": "You can renew your registration anytime from {{reg_window_start}} to {{reg_window_end}}. Our advisor will confirm the fee and the LTO charges. Want us to handle it for you?",
+      "fallback_tl": "Pwede po ninyong i-renew ang registration anumang araw mula {{reg_window_start}} hanggang {{reg_window_end}}. Kukumpirmahin ng advisor ang fee at ang charges ng LTO. Gusto po ba ninyong kami na ang mag-asikaso?"
+    },
+    {
+      "id": "RENEWAL_OFFER_OPEN",
+      "scenario": "Service 3: registration renewal, period open now",
+      "when": "Window status is open. Give the period, never one chosen date.",
+      "used_by": "assistant",
+      "en": "Your renewal period is {{reg_window_start}} to {{reg_window_end}}. Our fee is estimated at {{reg_service_fee}}, plus actual LTO charges; an advisor confirms the total. Would you like help?",
+      "tl": "Ang renewal period po ninyo ay {{reg_window_start}} hanggang {{reg_window_end}}. Estimated na {{reg_service_fee}} po ang fee namin, bukod sa actual LTO charges; advisor ang magko-confirm ng total. Gusto po ninyo ng tulong?",
+      "fallback_en": "You can renew your registration now, anytime until {{reg_window_end}}. Our advisor will confirm the fee and the LTO charges. Want us to handle it for you?",
+      "fallback_tl": "Pwede na po ninyong i-renew ang registration, anumang araw hanggang {{reg_window_end}}. Kukumpirmahin ng advisor ang fee at ang charges ng LTO. Gusto po ba ninyong kami na ang mag-asikaso?"
     },
     {
       "id": "REG_ALREADY_RENEWED",
       "scenario": "Registration already renewed",
-      "when": "Owner answered 1 (renewed). Do not re-pitch registration.",
+      "when": "Acknowledge renewal; skip renewal and continue only with services the customer wants.",
       "used_by": "assistant",
-      "en": "Thank you po! Would you like us to check the PMS or insurance of your {{model_or_plate}} instead?",
-      "tl": "Salamat po! Gusto po ba ninyong i-check namin ang PMS o insurance ng {{model_or_plate}} ninyo?"
+      "en": "Great, thanks for letting me know! That's one less thing to worry about.",
+      "tl": "Ayos po, salamat sa pagsabi! Isang aasikasuhin na lang po ang nabawas."
     },
     {
-      "id": "OFFER_WINDOW_UPCOMING",
-      "scenario": "Offer, window not open yet",
-      "when": "Owner answered 2 (not yet) and window_status is upcoming.",
+      "id": "REG_VALID_CHECK",
+      "scenario": "Check the registration before offering any time",
+      "when": "The renewal period has passed, or we cannot tell, and the customer has not said the registration is valid. Ask before showing any time.",
       "used_by": "assistant",
-      "en": "Thanks po. Your registration window is {{reg_window_start}} to {{reg_window_end}}. We can do registration, CTPL and PMS in one visit at {{branch_name}}. Would you like to book?",
-      "tl": "Salamat po. Ang registration window ninyo ay {{reg_window_start}} hanggang {{reg_window_end}}. Pwede po naming gawin ang registration, CTPL at PMS sa isang visit sa {{branch_name}}. Gusto po ba ninyong mag-book?"
-    },
-    {
-      "id": "OFFER_WINDOW_OPEN",
-      "scenario": "Offer, window open now",
-      "when": "Owner answered 2 (not yet) and window_status is open.",
-      "used_by": "assistant",
-      "en": "Thanks po. Your registration window is open now until {{reg_window_end}}. We can do registration, CTPL and PMS in one visit at {{branch_name}}. Would you like to book?",
-      "tl": "Salamat po. Bukas na po ang registration window ninyo hanggang {{reg_window_end}}. Pwede po naming gawin ang registration, CTPL at PMS sa isang visit sa {{branch_name}}. Gusto po ba ninyong mag-book?"
+      "en": "Before I look for a time, is your car's registration still valid?",
+      "tl": "Bago po ako maghanap ng oras, valid pa po ba ang registration ng sasakyan ninyo?"
     },
     {
       "id": "SLOTS_OFFER",
-      "scenario": "Offer appointment slots",
-      "when": "Owner accepted. Only slots inside the registration window are ever offered.",
+      "scenario": "Offer available times",
+      "when": "Customer said yes to a service. Only times inside the renewal period are ever offered.",
       "used_by": "assistant",
-      "en": "Slots at {{branch_name}}: {{slots_text}}. Reply with your preferred date/time or {{slot_codes}}. MORE for other dates.",
-      "tl": "Mga slot po sa {{branch_name}}: {{slots_text}}. Sabihin ang gustong petsa/oras o {{slot_codes}}. MORE para sa ibang petsa.",
-      "fallback_en": "Our advisor will message you shortly with available dates. Reply AGENT to talk to a person now.",
-      "fallback_tl": "Magme-message po ang advisor namin para sa available na petsa. Reply AGENT kung gusto ninyong makausap ang tao ngayon."
+      "en": "Great! These times are open at {{branch_name}}: {{slots_text}}. Which works for you?",
+      "tl": "Sige po! Bukas po ang mga oras na ito sa {{branch_name}}: {{slots_text}}. Alin po ang okay sa inyo?",
+      "fallback_en": "No times are available here right now. Please contact Toyota Manila Bay to check other dates.",
+      "fallback_tl": "Wala pong available na oras dito sa ngayon. Kontakin po ang Toyota Manila Bay para sa ibang petsa."
     },
     {
-      "id": "ODOMETER_ASK",
-      "scenario": "Ask odometer",
-      "when": "Before quoting the PMS.",
+      "id": "SLOTS_OFFER_RENEWAL",
+      "scenario": "Offer available times for the registration renewal",
+      "when": "Customer said yes to the renewal. Remind them of the period, then show the open times.",
       "used_by": "assistant",
-      "en": "To quote the right PMS, what is your car's current odometer reading in km?",
-      "tl": "Para makapag-quote po ng tamang PMS, ilan po ang odometer reading ng sasakyan ninyo (km)?"
+      "en": "Great! You can come anytime from {{reg_window_start}} to {{reg_window_end}}. Open times at {{branch_name}}: {{slots_text}}. Which works for you?",
+      "tl": "Sige po! Pwede po kayong pumunta anumang araw mula {{reg_window_start}} hanggang {{reg_window_end}}. Bukas po sa {{branch_name}}: {{slots_text}}. Alin po ang okay sa inyo?",
+      "fallback_en": "No times are available here right now. Please contact Toyota Manila Bay to check other dates.",
+      "fallback_tl": "Wala pong available na oras dito sa ngayon. Kontakin po ang Toyota Manila Bay para sa ibang petsa."
     },
     {
-      "id": "PMS_QUOTE",
-      "scenario": "Quote PMS",
-      "when": "After the odometer. Estimate only.",
+      "id": "SLOT_UNAVAILABLE",
+      "scenario": "Customer asks for a date or time that is not open",
+      "when": "Show the times that are open. Do not invent any other date.",
       "used_by": "assistant",
-      "en": "At {{pms_milestone_km}} km, your PMS is estimated at {{pms_price}}. The advisor will confirm the final amount.",
-      "tl": "Sa {{pms_milestone_km}} km po, ang PMS ay tinatayang {{pms_price}}. Kukumpirmahin po ng advisor ang final na halaga.",
-      "fallback_en": "I'll have the advisor confirm the exact PMS amount for your odometer reading.",
-      "fallback_tl": "Ipakukumpirma ko po sa advisor ang eksaktong halaga ng PMS para sa odometer ninyo."
+      "en": "That time isn't open. These are available: {{slots_text}}. Would any of them work?",
+      "tl": "Hindi po available ang oras na iyon. Available po: {{slots_text}}. May okay po ba sa inyo?"
     },
     {
       "id": "FEES",
       "scenario": "Registration fees",
-      "when": "Owner asks what it costs.",
+      "when": "Owner asks what the renewal costs.",
       "used_by": "assistant",
-      "en": "Registration service fee is {{reg_service_fee}} plus LTO charges at actual. I'll give the exact LTO total at the branch.",
-      "tl": "Ang registration service fee po ay {{reg_service_fee}} plus LTO charges at actual. Ibibigay ko po ang eksaktong LTO total sa branch.",
-      "fallback_en": "The advisor will confirm the registration service fee and the LTO charges. LTO charges are fixed by law.",
-      "fallback_tl": "Kukumpirmahin po ng advisor ang registration service fee at LTO charges. Fixed po by law ang LTO charges."
+      "en": "Our registration fee is estimated at {{reg_service_fee}}, plus the LTO's own charges at actual cost. Our advisor will give you the exact total.",
+      "tl": "Ang registration fee po namin ay tinatayang {{reg_service_fee}}, plus ang charges ng LTO sa actual na halaga. Ibibigay po ng advisor ang eksaktong total.",
+      "fallback_en": "The advisor will confirm our fee and the LTO charges. The LTO charges are fixed by law.",
+      "fallback_tl": "Kukumpirmahin po ng advisor ang fee namin at ang charges ng LTO. Fixed po by law ang charges ng LTO."
     },
     {
-      "id": "CTPL_INFO",
-      "scenario": "CTPL",
-      "when": "Owner asks whether CTPL is needed.",
+      "id": "BASIC_INSURANCE_INFO",
+      "scenario": "Required basic insurance (CTPL)",
+      "when": "Owner asks whether the basic insurance is needed, or what it is.",
       "used_by": "assistant",
-      "en": "CTPL needs to be renewed together with the registration. It can't be dropped if the registration goes ahead.",
-      "tl": "Kailangan po i-renew ang CTPL kasabay ng registration. Hindi po ito pwedeng alisin kung tuloy ang registration."
-    },
-    {
-      "id": "COMP_ASK",
-      "scenario": "Comprehensive insurance",
-      "when": "Optional third leg.",
-      "used_by": "assistant",
-      "en": "Is your comprehensive insurance still active? If not, we can offer renewal, subject to the insurer's approval.",
-      "tl": "Active pa po ba ang comprehensive insurance ninyo? Kung hindi, pwede po naming i-offer ang renewal, subject sa approval ng insurer."
+      "en": "The required basic insurance is renewed together with the registration. It can't be dropped if the registration goes ahead.",
+      "tl": "Kasabay po ng registration ang pag-renew ng required basic insurance. Hindi po ito pwedeng alisin kung tuloy ang registration."
     },
     {
       "id": "EMISSION",
@@ -125,132 +225,196 @@
       "scenario": "Bank-held CR",
       "when": "Owner says the car is under a bank loan.",
       "used_by": "assistant",
-      "en": "Thanks po. I'll confirm with the LTO what is accepted for the CR, and let you know before your visit.",
-      "tl": "Salamat po. Kukumpirmahin ko po sa LTO kung ano ang tinatanggap para sa CR, at ipapaalam ko bago ang visit ninyo."
+      "en": "Thanks for letting me know. Please confirm with the dealership which papers are accepted when the bank holds your car's CR.",
+      "tl": "Salamat po sa pagsabi. Paki-confirm po sa dealership kung anong papeles ang tinatanggap kapag nasa bangko ang CR."
     },
     {
       "id": "DOCUMENTS",
-      "scenario": "Documents to bring",
-      "when": "After a slot is chosen.",
+      "scenario": "What to bring",
+      "when": "After a time is chosen, or when asked.",
       "used_by": "assistant",
-      "en": "Please bring your OR/CR and a valid ID. If someone else will bring the car, we can send an authorization letter to e-sign.",
-      "tl": "Dalhin po ang OR/CR at valid ID. Kung ibang tao ang magdadala ng sasakyan, pwede po naming ipadala ang authorization letter na pwedeng i-e-sign."
+      "en": "Please bring your car's OR/CR and a valid ID. If someone else will bring the car, ask the dealership about authorization requirements.",
+      "tl": "Dalhin po ang OR/CR at valid ID. Kung ibang tao ang magdadala ng sasakyan, itanong po sa dealership ang authorization requirements."
+    },
+    {
+      "id": "ONLY_THIS_SERVICE",
+      "scenario": "Negotiation: customer wants just one service",
+      "when": "Customer says 'just the maintenance', 'yung isa lang', or similar. Fill {{service_name}} with the service they chose.",
+      "used_by": "assistant",
+      "en": "Of course, we can do just the {{service_name}}. Want me to find a time?",
+      "tl": "Sige po, {{service_name}} lang. Gusto po ba ninyong hanapan ko kayo ng oras?"
+    },
+    {
+      "id": "COMBINE_OK",
+      "scenario": "Negotiation: customer asks to do several services together",
+      "when": "Customer asks if more than one can be done in one visit.",
+      "used_by": "assistant",
+      "en": "Yes, we can do them in one visit at {{branch_name}}. Which ones would you like?",
+      "tl": "Opo, pwede po sa isang visit sa {{branch_name}}. Alin po ang gusto ninyo?"
+    },
+    {
+      "id": "PRICE_CONCERN_PMS",
+      "scenario": "Negotiation: maintenance feels expensive",
+      "when": "Acknowledge, then offer a flexible next step. Never invent a discount.",
+      "used_by": "assistant",
+      "en": "I understand. The amount is an estimate; an advisor confirms it before you approve any work. You can ask for required work and optional extras to be listed separately.",
+      "tl": "Naiintindihan ko po. Estimate lang po ang halaga; advisor ang magko-confirm bago ninyo aprubahan ang trabaho. Pwede pong ihiwalay sa estimate ang kailangan at optional na dagdag."
+    },
+    {
+      "id": "PRICE_CONCERN_INSURANCE",
+      "scenario": "Negotiation: insurance feels expensive",
+      "when": "Acknowledge, then offer a flexible next step. Never invent a discount.",
+      "used_by": "assistant",
+      "en": "I understand. The estimate depends on your car and policy terms. An advisor can explain the options before you decide.",
+      "tl": "Naiintindihan ko po. Depende sa sasakyan at policy terms ang estimate. Pwede pong ipaliwanag ng advisor ang options bago kayo magdesisyon."
+    },
+    {
+      "id": "PRICE_CONCERN_RENEWAL",
+      "scenario": "Negotiation: renewal feels expensive",
+      "when": "Acknowledge, explain what is fixed, offer an advisor.",
+      "used_by": "assistant",
+      "en": "I understand. The LTO's charges are fixed by law, so I can't change those. Our own fee is estimated at {{reg_service_fee}}. Would you like to go ahead, or talk to an advisor about it?",
+      "tl": "Naiintindihan ko po. Fixed po by law ang charges ng LTO kaya hindi ko po mababago iyon. Tinatayang {{reg_service_fee}} po ang sariling fee namin. Gusto po ba ninyong ituloy, o makausap ang advisor tungkol dito?"
     },
     {
       "id": "DISCOUNT_ASK",
       "scenario": "Owner asks for a discount",
-      "when": "",
+      "when": "No discount on LTO charges. Do not invent any promo.",
       "used_by": "assistant",
-      "en": "LTO charges are fixed by law po, so there's no discount on them. Ask the advisor about current service promos.",
-      "tl": "Fixed po by law ang LTO charges kaya walang discount dito. Itanong po sa advisor ang mga kasalukuyang service promo."
+      "en": "I can't offer a discount here. An advisor can confirm any current offers and the final estimate; LTO charges are separate at actual cost.",
+      "tl": "Hindi po ako makakapagbigay ng discount dito. Advisor po ang magko-confirm ng kasalukuyang offers at final estimate; hiwalay po ang actual LTO charges."
     },
     {
-      "id": "TOO_EXPENSIVE",
-      "scenario": "Price objection",
-      "when": "",
+      "id": "THINKING_TIME",
+      "scenario": "Negotiation: customer wants time to think",
+      "when": "Do not repeat the offer.",
       "used_by": "assistant",
-      "en": "Understood po. Card installment is available at the cashier. We can also book just the PMS and decide on the rest with the advisor. Shall I book it?",
-      "tl": "Naiintindihan ko po. May card installment po sa cashier. Pwede rin pong PMS lang muna ang i-book at pag-usapan sa advisor ang iba. Ibu-book ko na po ba?"
+      "en": "Sure, take your time. If you have any questions, just ask me here.",
+      "tl": "Sige po, take your time. Kung may tanong po kayo, itanong lang po dito."
+    },
+    {
+      "id": "ADDON_ASK",
+      "scenario": "Negotiation: one light mention of the next service",
+      "when": "Customer said yes to a service. Use ONCE in the whole conversation. Fill {{next_service_name}} with the next service in priority order.",
+      "used_by": "assistant",
+      "en": "Glad to help! Would you like me to also check your {{next_service_name}}? No problem if not.",
+      "tl": "Sige po! Gusto po ba ninyong i-check ko rin ang {{next_service_name}} ninyo? Okay lang po kung hindi."
+    },
+    {
+      "id": "NEXT_SERVICE_LEAD_IN",
+      "scenario": "Negotiation: after a no, move to the next service",
+      "when": "Customer declined or skipped a service. Say this short lead-in, then give the matching offer template for the next service, in the same reply if it fits in two SMS. Never lead in twice.",
+      "used_by": "assistant",
+      "en": "No problem at all!",
+      "tl": "Okay lang po!"
+    },
+    {
+      "id": "INFO_ADVISOR_CONFIRMS",
+      "scenario": "Customer asks something not in the sources",
+      "when": "For example, what exactly is included. Do not guess.",
+      "used_by": "assistant",
+      "en": "An advisor needs to confirm that detail. Please contact Toyota Manila Bay directly for help.",
+      "tl": "Advisor po ang kailangang magkumpirma ng detalyeng iyan. Kontakin po ang Toyota Manila Bay nang direkta para sa tulong."
     },
     {
       "id": "BOOKING_CONFIRMED",
       "scenario": "Booking confirmed (sent by the service)",
       "when": "The SERVICE sends this after the booking is written. The model never writes it.",
       "used_by": "service",
-      "en": "Confirmed po! {{services_list}} on {{slot_selected}} at {{branch_name}} for {{plate}}. Ref {{booking_ref}}. Bring your OR/CR and a valid ID. To change it, reply AGENT.",
-      "tl": "Confirmed po! {{services_list}} sa {{slot_selected}} sa {{branch_name}} para sa {{plate}}. Ref {{booking_ref}}. Dalhin ang OR/CR at valid ID. Para magpalit, reply AGENT."
+      "en": "Recorded: {{services_list}} on {{slot_selected}} at {{branch_name}}. Ref {{booking_ref}}. Please contact the dealership to confirm the reservation and requirements.",
+      "tl": "Naitala po: {{services_list}} sa {{slot_selected}}, {{branch_name}}. Ref {{booking_ref}}. Kontakin po ang dealership para kumpirmahin ang reservation at requirements."
     },
     {
       "id": "SLOT_TAKEN",
-      "scenario": "Chosen slot no longer free (sent by the service)",
-      "when": "The SERVICE sends this when the slot is taken or no longer valid.",
+      "scenario": "Chosen time no longer free (sent by the service)",
+      "when": "The SERVICE sends this when the time is taken or no longer valid.",
       "used_by": "service",
-      "en": "Sorry po, that slot was just taken. Available now: {{slots_text}}. Reply with a date/time or {{slot_codes}}.",
-      "tl": "Pasensya na po, kakakuha lang ng slot na iyon. Available ngayon: {{slots_text}}. Sabihin ang petsa/oras o {{slot_codes}}.",
-      "fallback_en": "Sorry po, that slot was just taken and no other slot is open right now. An advisor will message you with new dates.",
-      "fallback_tl": "Pasensya na po, kakakuha lang ng slot na iyon at wala nang ibang bukas ngayon. Magme-message po ang advisor namin para sa bagong petsa."
+      "en": "Sorry, that time was just taken. Open now: {{slots_text}}. Which works for you?",
+      "tl": "Pasensya na po, kakakuha lang ng oras na iyon. Bukas ngayon: {{slots_text}}. Alin po ang okay sa inyo?",
+      "fallback_en": "That time is no longer available, and no other times are open here. Please contact Toyota Manila Bay for other dates.",
+      "fallback_tl": "Hindi na po available ang oras na iyon at wala nang ibang bukas dito. Kontakin po ang Toyota Manila Bay para sa ibang petsa."
     },
     {
       "id": "BOOKING_ERROR",
       "scenario": "Booking could not be saved (sent by the service)",
       "when": "The SERVICE sends this if the booking store fails. Nothing is confirmed.",
       "used_by": "service",
-      "en": "Sorry po, we couldn't save your booking just now. An advisor will message you shortly to finish it.",
-      "tl": "Pasensya na po, hindi namin nai-save ang booking ninyo ngayon. Magme-message po ang advisor namin para tapusin ito."
+      "en": "I couldn't save your request just now. Nothing has been reserved. Please try again or contact Toyota Manila Bay directly.",
+      "tl": "Hindi ko po nai-save ang request ninyo. Wala pa pong naka-reserve. Subukan po ulit o kontakin ang Toyota Manila Bay nang direkta."
     },
     {
       "id": "EXPIRED_COLLECTION",
-      "scenario": "Registration expired, pickup available (G-REG-01)",
-      "when": "Owner says the window has passed or the registration has expired, and collection_available is true.",
+      "scenario": "Registration expired, pickup available",
+      "when": "Owner says the renewal period has passed or the registration has expired, and collection_available is true.",
       "used_by": "assistant",
-      "en": "Thanks for telling me po. I can't book you to drive in. We can arrange a pickup for your {{model_or_plate}}. {{collection_note}} Would you like us to arrange it?",
-      "tl": "Salamat po sa pagsabi. Hindi po ako makakapag-book na i-drive ang sasakyan. Pwede po kaming mag-arrange ng pickup para sa {{model_or_plate}}. {{collection_note}} Gusto po ba ninyong i-arrange namin?",
-      "fallback_en": "Thanks for telling me po. An unregistered car should not be driven, so I can't book a drive-in visit. An advisor will guide you on settling the registration first. Shall I have them contact you?",
+      "en": "I can't arrange a pickup in this chat. Please contact Toyota Manila Bay for help without driving the car with expired registration.",
+      "tl": "Hindi po ako makakapag-arrange ng pickup dito. Kontakin po ang Toyota Manila Bay para sa tulong nang hindi i-drive ang sasakyang expired ang registration.",
+      "fallback_en": "Thanks for telling me. A car with an expired registration should not be driven, so I can't book a drive-in visit. An advisor will guide you on settling the registration first. Shall I have them contact you?",
       "fallback_tl": "Salamat po sa pagsabi. Hindi po dapat i-drive ang sasakyang expired ang registration kaya hindi ako makakapag-book ng drive-in. Gagabayan po kayo ng advisor sa pag-asikaso muna ng registration. Ipa-contact ko po ba sila sa inyo?"
     },
     {
       "id": "EXPIRED_NO_COLLECTION",
-      "scenario": "Registration expired, no pickup (G-REG-01)",
-      "when": "Owner says the window has passed or the registration has expired, and collection_available is not true.",
+      "scenario": "Registration expired, no pickup",
+      "when": "Owner says the renewal period has passed or the registration has expired, and collection_available is not true.",
       "used_by": "assistant",
-      "en": "Thanks for telling me po. An unregistered car should not be driven, so I can't book a drive-in visit. An advisor will guide you on settling the registration first, then we can book your PMS and insurance. Shall I have them contact you?",
-      "tl": "Salamat po sa pagsabi. Hindi po dapat i-drive ang sasakyang expired ang registration kaya hindi ako makakapag-book ng drive-in. Gagabayan po kayo ng advisor sa pag-asikaso muna ng registration, saka po natin i-book ang PMS at insurance. Ipa-contact ko po ba sila sa inyo?"
+      "en": "I can't arrange a visit that requires driving with expired registration. Please contact Toyota Manila Bay for help with the next step.",
+      "tl": "Hindi po ako makakapag-book ng visit na kailangang i-drive ang sasakyang expired ang registration. Kontakin po ang Toyota Manila Bay para sa susunod na hakbang."
     },
     {
       "id": "DRIVE_IN_REFUSAL",
       "scenario": "Owner proposes to drive in while expired",
       "when": "Never agree. Do not endorse.",
       "used_by": "assistant",
-      "en": "I understand po, but I can't book a visit that needs the car to be driven while its registration is expired. An advisor can guide you on the next step. Reply AGENT to talk to a person.",
-      "tl": "Naiintindihan ko po, pero hindi ako makakapag-book ng visit na kailangang i-drive ang sasakyan habang expired ang registration. Gagabayan po kayo ng advisor sa susunod na hakbang. Reply AGENT para makausap ang tao."
+      "en": "I can't arrange a visit that requires driving with expired registration. Please contact Toyota Manila Bay for help with the next step.",
+      "tl": "Hindi po ako makakapag-book ng visit na kailangang i-drive ang sasakyang expired ang registration. Kontakin po ang Toyota Manila Bay para sa susunod na hakbang."
     },
     {
       "id": "DECLINE_CLOSE",
       "scenario": "Owner declines",
-      "when": "",
+      "when": "Also used after two declined services. Leave the door open.",
       "used_by": "assistant",
-      "en": "Understood po, thank you for your time. If you change your mind, just text us here.",
+      "en": "Understood, thank you for your time. If you change your mind, just text us here.",
       "tl": "Naiintindihan ko po, salamat sa oras ninyo. Kung magbago po ang isip ninyo, mag-text lang po dito."
     },
     {
       "id": "CALLBACK_ASK",
       "scenario": "Owner is busy",
-      "when": "",
+      "when": "Do not offer another service.",
       "used_by": "assistant",
-      "en": "Sure po. What day and time should I message you again?",
-      "tl": "Sige po. Anong araw at oras po ako ulit magme-message sa inyo?"
+      "en": "No problem, we can leave it here for now. You can message again whenever you're ready.",
+      "tl": "Walang problema po. Dito muna tayo. Mag-message lang po ulit kapag handa na kayo."
     },
     {
       "id": "CALLBACK_CONFIRM",
       "scenario": "Callback agreed",
       "when": "callback_time comes from the owner's reply.",
       "used_by": "assistant",
-      "en": "Noted po. I'll message you again on {{callback_time}}.",
-      "tl": "Noted po. Magme-message po ako ulit sa {{callback_time}}."
+      "en": "I can't schedule a follow-up message here. You're welcome to message again whenever it suits you.",
+      "tl": "Hindi po ako makakapag-schedule ng follow-up message dito. Mag-message lang po ulit kapag okay sa inyo."
     },
     {
       "id": "HANDOFF",
       "scenario": "Owner asks for a person",
-      "when": "Also used when the answer is not in the record or the templates.",
+      "when": "Also used when the answer is not in the record or the templates, or the owner is upset.",
       "used_by": "assistant",
-      "en": "Of course po. I'm passing you to a TMBG advisor now with the details so far. They will message you here.",
-      "tl": "Sige po. Ipapasa ko na po kayo sa TMBG advisor kasama ang mga detalye natin. Magme-message po sila dito."
+      "en": "Of course. I can't connect you with an advisor here. Please contact Toyota Manila Bay directly for help.",
+      "tl": "Sige po. Hindi po ako makakapag-connect sa advisor dito. Kontakin po ang Toyota Manila Bay nang direkta para sa tulong."
     },
     {
       "id": "OPTOUT_CONFIRM",
       "scenario": "Opt-out",
-      "when": "STOP, TIGIL, or equivalent. Also sent by the service without calling the model.",
+      "when": "Any clear request to stop messages, including natural wording. The service suppresses this conversation after one acknowledgement.",
       "used_by": "assistant",
-      "en": "Noted po. You will no longer receive campaign messages from us.",
-      "tl": "Noted po. Hindi na po kayo makakatanggap ng campaign messages mula sa amin."
+      "en": "Understood. I won't send further messages in this conversation.",
+      "tl": "Naiintindihan ko po. Hindi na po ako magme-message sa usapang ito."
     },
     {
       "id": "UNCLEAR",
       "scenario": "Message not understood",
-      "when": "",
+      "when": "Ask once, in a friendly way. Never show codes.",
       "used_by": "assistant",
-      "en": "Sorry po, I didn't catch that. Please reply with a code: 1=Yes 2=Not yet 3=Not sure, or AGENT to talk to a person.",
-      "tl": "Pasensya na po, hindi ko po naintindihan. Mag-reply po ng code: 1=Oo 2=Hindi pa 3=Hindi sigurado, o AGENT para makausap ang tao."
+      "en": "Could you tell me a little more about what you'd like help with?",
+      "tl": "Pwede po bang sabihin ninyo nang kaunti pa kung anong tulong ang kailangan ninyo?"
     }
   ]
 }

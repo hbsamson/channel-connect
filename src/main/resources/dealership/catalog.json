@@ -1,7 +1,7 @@
 {
 	"disclaimer": "All prices, hours, locations, and appointment slots below are fictional demo data.",
 	"hours": "Demo hours: Monday–Saturday, 8:00 AM–5:00 PM (Asia/Manila).",
-	"location": "Demo service desk; confirm the real branch address with the dealership.",
+	"location": "Please contact Toyota Manila Bay to confirm the branch address.",
 	"privacyContact": null,
 	"cannedAnswers": {
 		"VALUE": {
@@ -68,7 +68,7 @@
 	"services": {
 		"registration": {
 			"name": "registration renewal",
-			"price": "Demo service fee: PHP 1,500; government fees need confirmation.",
+			"price": "Estimated service fee: PHP 1,500; government fees need confirmation.",
 			"smsInclusions": "Registration: renewal assistance; fees and documents need confirmation.",
 			"inclusions": [
 				"Registration assistance"
@@ -76,7 +76,7 @@
 		},
 		"pms": {
 			"name": "Periodic Maintenance Service",
-			"price": "Demo starting price: PHP 3,000; final vehicle-specific quote needs confirmation.",
+			"price": "Estimated starting price: PHP 3,000; final vehicle-specific quote needs confirmation.",
 			"smsInclusions": "Minor PMS: Genuine oil, filter, sump washer, safety check; major work varies.",
 			"inclusions": [
 				"Toyota Genuine Motor Oil",
