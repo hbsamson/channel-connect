@@ -1,6 +1,6 @@
-# TMBG 3-in-1 SMS and Messenger demo
+# TMBG 3-in-1 SMS, Messenger and WhatsApp demo
 
-The supplied TMBG instructions run in the `local` and `test` profiles for SMS and Facebook Messenger. Both use the configured `AiClient`, the supplied fictional customer, and one shared booking file. Keep the existing provider profiles and repository-root `.env`. Local demo settings allow two SMS segments for the supplied templates.
+The supplied TMBG instructions run in the `local` and `test` profiles for SMS, Facebook Messenger and WhatsApp. All use the configured `AiClient`, the supplied fictional customer, and one shared booking file. Keep the existing provider profiles and repository-root `.env`. Local demo settings allow two SMS segments for the supplied templates.
 
 ## Messenger
 
@@ -9,6 +9,12 @@ Send a text such as `Hello` to the configured Facebook Page. The first message s
 This uses the existing signed webhook at `/api/webhooks/messenger` and the existing `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_PAGE_ACCESS_TOKEN`, `META_PAGE_ID`, and `META_GRAPH_API_VERSION` settings. The Page webhook must already point to this application's public HTTPS URL. The same `OPENAI_*` settings apply. Restart the application with the `local` profile after updating the code; no separate campaign-start request or phone linking is needed for Messenger. Messenger also works when SMS is disabled.
 
 Conversation history and duplicate-message tracking are separate for each channel, Page/account, and sender. Messenger never reads an SMS conversation. Slots and booking references are shared, so a slot taken on either channel is unavailable on the other. Messenger records add `channel: "MESSENGER"` and `sender_id` (the Page-scoped sender ID); `account_id` is the Page ID and `phone` remains the supplied fictional customer's phone. These demo sessions and duplicate-message records last until application restart.
+
+## WhatsApp
+
+In `local` and `test`, authenticated incoming WhatsApp text messages also use `TmbgBookingAssistant` instead of the legacy dealership workflow. Send a message to the configured WhatsApp number to start a separate demo session; the first message returns the greeting and later messages use the booking assistant. The existing signed `/webhooks/whatsapp` endpoint, configured phone-number ID, and provider client remain in use. The Meta app must also be subscribed to the WhatsApp Business Account. Messages outside the 24-hour reply window are ignored.
+
+WhatsApp history is isolated by channel, account and sender. Slots and booking references are shared with SMS and Messenger. Saved WhatsApp bookings include `channel: "WHATSAPP"`, the WhatsApp `sender_id`, and the configured phone-number ID as `account_id`; `phone` remains the supplied fictional customer's phone. Sessions reset on restart. A failed reply is retained for the next incoming turn, following the Messenger demo behavior; provider acceptance does not confirm delivery. Production retains the existing dealership workflow and requires a durable dispatcher.
 
 ## Start an SMS conversation
 
