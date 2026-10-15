@@ -123,6 +123,7 @@ public class TmbgBookingAssistant {
 		String cached = session.replies.get(receiptId);
 		if (cached != null) return cached;
 		if (session.stage.equals("CONFIRMED")) return null;
+		if (content.toLowerCase(Locale.ROOT).matches("(?s).*\\b(po|opo|hindi|sige|oo|salamat|magkano|ano|gusto)\\b.*")) session.language = "tl";
 		registrationStatus(session, content);
 		Map<String, Object> fields = fields(session, phone(channel, participant));
 		String reply;
@@ -246,7 +247,6 @@ public class TmbgBookingAssistant {
 
 	private JsonNode mockAnswer(Session session, String text, Map<String, Object> fields) {
 		String normalized = text.toLowerCase(Locale.ROOT);
-		if (normalized.matches("(?s).*\\b(po|opo|hindi|sige|oo|salamat|magkano|ano|gusto)\\b.*")) session.language = "tl";
 		String template;
 		String stage = session.stage;
 		String code = chosenSlot(session, text);
@@ -429,7 +429,7 @@ public class TmbgBookingAssistant {
 		private final String channel;
 		private String stage = "OPENER_SENT";
 		private String registration = "unknown";
-		private String language = "tl";
+		private String language = "en";
 		private Map<String, String> slots = new LinkedHashMap<>();
 		private List<String> services = List.of("registration", "ctpl", "pms");
 		private final List<Map<String, String>> history = new ArrayList<>();

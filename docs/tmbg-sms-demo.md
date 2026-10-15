@@ -31,6 +31,8 @@ The override changes only where SMS is sent. The assistant continues to use the 
 
 ## Conversation flow
 
+Every new SMS or Messenger conversation starts with the English `OPEN_GREETING`. Replies stay in English until the customer uses Tagalog or Taglish, then follow that language. Numbers, slot codes and unclear messages retain the current conversation language, defaulting to English. Existing sessions keep their language until a new campaign start or application restart.
+
 The service renders and sends `OPEN_GREETING` without an LLM call. Fresh replies from the demo participant use the supplied rules, templates, customer record, and conversation state instead of the legacy shared dealership workflow. Hosted inbox polling selects the latest fresh message by `received_at` for each demo account/participant, using the receive ID to break ties. Earlier messages in the snapshot remain available in the retained inbox without triggering replies.
 
 The service merges the six context blocks and asks the LLM for one JSON response. The LLM has no tools or write access. The service validates the response before enqueuing SMS and owns booking creation. The demo continues until a booking is recorded; other terminal outcomes in the supplied materials do not end this demo. Callback and advisor requests do not contact anyone or trigger an external integration.

@@ -7,7 +7,7 @@
       "scenario": "First outbound SMS (greeting)",
       "when": "Sent by the campaign sender, once. Says who we are and what it is about, gives the opt-out, and asks permission to ask. No dates, fees or questions about the car yet.",
       "used_by": "campaign_sender",
-      "en": "Hi po {{first_name}}! AI assistant of Toyota Manila Bay here, about your {{model_or_plate}}. May I ask a quick question? STOP to opt out.",
+      "en": "Hi {{first_name}}! AI assistant of Toyota Manila Bay here, about your {{model_or_plate}}. May I ask a quick question? STOP to opt out.",
       "tl": "Hello po, {{first_name}}! AI assistant po ng Toyota Manila Bay, tungkol sa {{model_or_plate}} ninyo. May itatanong lang po. STOP para mag-opt out."
     },
     {
