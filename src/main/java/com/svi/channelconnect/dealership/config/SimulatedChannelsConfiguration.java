@@ -17,6 +17,7 @@ public class SimulatedChannelsConfiguration {
 	@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "sms.enabled", havingValue = "false", matchIfMissing = true)
 	MessagingChannel simulatedSmsChannel() { return simulated("SMS"); }
 	@Bean
+	@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "telegram.enabled", havingValue = "false", matchIfMissing = true)
 	MessagingChannel simulatedTelegramChannel() { return simulated("TELEGRAM"); }
 	private MessagingChannel simulated(String name) {
 		return new MessagingChannel() {

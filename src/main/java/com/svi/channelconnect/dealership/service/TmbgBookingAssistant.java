@@ -152,6 +152,11 @@ public class TmbgBookingAssistant {
 		return sessions.containsKey(new ConversationKey(channel, account, participant));
 	}
 
+	public synchronized boolean isSuppressed(String channel, String account, String participant) {
+		Session session = sessions.get(new ConversationKey(channel, account, participant));
+		return session != null && session.suppressed;
+	}
+
 	public synchronized String reply(String channel, String account, String participant, String receiptId, String content) {
 		ConversationKey key = new ConversationKey(channel, account, participant);
 		Session session = sessions.get(key);
@@ -513,7 +518,8 @@ public class TmbgBookingAssistant {
 		booking.put("booking_ref", reference); booking.put("receipt_id", incoming.id());
 		booking.put("customer_id", customer.path("customer_id").asString()); booking.put("plate", customer.path("plate").asString());
 		booking.put("account_id", incoming.accountId()); booking.put("phone", phone(incoming.channel(), incoming.sender()));
-		if (incoming.channel().equals("MESSENGER") || incoming.channel().equals("WHATSAPP")) {
+		if (incoming.channel().equals("MESSENGER") || incoming.channel().equals("WHATSAPP")
+				|| incoming.channel().equals("TELEGRAM")) {
 			booking.put("channel", incoming.channel()); booking.put("sender_id", incoming.sender());
 		}
 		booking.put("slot_code", code); booking.put("appointment", selected); booking.put("services", services);
@@ -960,7 +966,11 @@ public class TmbgBookingAssistant {
 	private LocalDate today() { return LocalDate.now(clock.withZone(MANILA)); }
 	private String phone(String channel, String participant) { return channel.equals("SMS") ? participant : customerPhone(); }
 	private String channelText(String text, String channel) {
-		String channelName = channel.equals("WHATSAPP") ? "WhatsApp" : "Messenger";
+		String channelName = switch (channel) {
+			case "WHATSAPP" -> "WhatsApp";
+			case "TELEGRAM" -> "Telegram";
+			default -> "Messenger";
+		};
 		return channel.equals("SMS") ? text : text.replace("CUSTOMER SMS", "CUSTOMER MESSAGE").replace("SMS", channelName);
 	}
 	private String read(ResourceLoader resources, String name) throws IOException {
