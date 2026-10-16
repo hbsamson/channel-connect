@@ -1,6 +1,8 @@
 package com.svi.channelconnect.whatsapp.service;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.svi.channelconnect.whatsapp.dto.request.WhatsAppWebhookRequest;
@@ -13,6 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class WhatsAppWebhookService {
+	private static final Logger LOGGER = LoggerFactory.getLogger(WhatsAppWebhookService.class);
 	private static final String WHATSAPP_OBJECT = "whatsapp_business_account";
 
 	private final ObjectMapper objectMapper;
@@ -71,6 +74,8 @@ public class WhatsAppWebhookService {
 				.increment(mapping.unsupportedEvents());
 		meterRegistry.counter("whatsapp.webhook.events", "type", "invalid")
 				.increment(mapping.invalidEvents());
+		LOGGER.info("WhatsApp webhook handled accepted={} duplicates={} overloaded={} statuses={} unsupported={} invalid={}",
+				accepted, duplicates, overloaded, mapping.statusEvents(), mapping.unsupportedEvents(), mapping.invalidEvents());
 
 		return new WebhookHandlingResult(
 				accepted, duplicates, overloaded,

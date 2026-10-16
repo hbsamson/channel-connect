@@ -1,0 +1,85 @@
+{
+  "_note": "Every price is an estimate and is always said as an estimate (around, usually, estimated); never as an exact quote. The three services, in the order they are offered. The service layer uses this to fill price fields and to decide which service to offer next.",
+  "version": "v2",
+  "services": [
+    {
+      "id": "renewal",
+      "priority": 1,
+      "name_en": "LTO Registration Renewal",
+      "name_tl": "LTO Registration Renewal",
+      "what_it_is": "Renewal of the car's registration, with the required basic insurance renewed together with it.",
+      "price": {
+        "service_fee": 1250,
+        "text": "PHP 1,250",
+        "extra": "Government registration charges are extra, at actual cost, and fixed by law. They cannot be discounted.",
+        "confirmed": false
+      },
+      "offer_when": "Use when registration renewal is chosen or asked about. Give reg_window_start through reg_window_end as a period. After an explicit selection proceed to scheduling for the chosen services only; never offer omitted services.",
+      "skip_when": [
+        "The customer says it is already renewed.",
+        "The customer declined it."
+      ],
+      "expired_registration": "If the renewal period has passed or the customer says it expired, never book a drive-in. Follow the expired-registration rules."
+    },
+    {
+      "id": "pms",
+      "priority": 2,
+      "name_en": "Preventative Maintenance Service",
+      "name_tl": "Preventative Maintenance Service",
+      "what_it_is": "Regular maintenance of the car at the branch.",
+      "price": {
+        "basis": "5,000 km service. For another km reading, the advisor confirms the amount.",
+        "confirmed": false,
+        "bands": [
+          {
+            "id": "standard",
+            "applies_to": "Standard passenger cars and small SUVs, for example Vios, Wigo, Raize.",
+            "low": 1500,
+            "high": 2500,
+            "plus": false,
+            "text": "PHP 1,500 to 2,500",
+            "note": "Basic parts and labor with standard oil."
+          },
+          {
+            "id": "large_or_hybrid",
+            "applies_to": "Larger diesel vehicles and hybrids, for example Fortuner, Innova, Zenix.",
+            "low": 3000,
+            "high": 5500,
+            "plus": true,
+            "text": "PHP 3,000 to 5,500+",
+            "note": "Final amount depends on the model, engine and oil grade."
+          }
+        ],
+        "if_model_unknown": "Say the advisor will confirm the amount for the car."
+      },
+      "offer_when": "Use when maintenance is chosen or asked about. Explicit selection proceeds to scheduling without asking about omitted services. Retain second priority only for an existing legacy individual-offer flow.",
+      "skip_when": [
+        "The customer says the car was just serviced.",
+        "The customer declined it."
+      ],
+      "wording_by_service_state": {
+        "due_soon": "coming up for its regular maintenance",
+        "overdue": "due for its regular maintenance",
+        "stopped": "We would love to see your car again. Never say it has been a long time or blame the customer.",
+        "never_serviced_here": "We can take care of the regular maintenance."
+      }
+    },
+    {
+      "id": "insurance",
+      "priority": 3,
+      "name_en": "Comprehensive Insurance Renewal",
+      "name_tl": "Comprehensive Insurance Renewal",
+      "what_it_is": "Full-coverage car insurance (comprehensive). The required basic insurance is separate: it is renewed together with the registration and is part of the registration renewal.",
+      "price": {
+        "source_file": "insurance_prices.json",
+        "if_range_missing": "Say the advisor will confirm the price. Never quote the previous premium as the new price.",
+        "confirmed": false
+      },
+      "offer_when": "Use when insurance is chosen or asked about. Never add insurance to a maintenance/registration choice. Do not assume renewal is due. Retain third priority only for an existing legacy individual-offer flow.",
+      "skip_when": [
+        "After being asked, the customer says insurance is still active, already renewed or not needed."
+      ],
+      "always_say": "The insurance company still has to approve it."
+    }
+  ]
+}

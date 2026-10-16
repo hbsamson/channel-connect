@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.svi.channelconnect.dealership.model.IncomingMessage;
 import com.svi.channelconnect.dealership.persistence.DealershipRepository;
+import com.svi.channelconnect.whatsapp.exception.WhatsAppApiException;
 
 @Service
 public class DealershipConversationService {
@@ -58,6 +59,10 @@ public class DealershipConversationService {
 				store.event(receipt.customerId(), null, "MESSAGE_SENT", clock.millis());
 				return new Result(receipt.customerId(), reply, status);
 			} catch (RuntimeException exception) {
+				String category = exception instanceof WhatsAppApiException failure
+						? failure.category().name() : exception.getClass().getSimpleName();
+				LOGGER.warn("Dealership reply send failed channel={} messageId={} category={}",
+						incoming.channel(), messageId, category);
 				store.messageStatus(messageId, null, "UNKNOWN");
 				store.event(receipt.customerId(), null, "REPLY_SEND_FAILED", clock.millis());
 				return new Result(receipt.customerId(), reply, "UNKNOWN");

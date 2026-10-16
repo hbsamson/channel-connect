@@ -119,7 +119,8 @@ public class GoipHttpApiReceivePoller {
 			SmsTmbgDemoService demo = demos.getIfAvailable();
 			Map<DemoParticipant, RemoteMessage> latest = new HashMap<>();
 			for (RemoteMessage message : received) {
-				if (demo != null && message.processReply() && demo.accepts(message.accountId(), message.sender())) {
+				if (demo != null && message.processReply()
+						&& (SmsTmbgDemoService.isReset(message.content()) || demo.accepts(message.accountId(), message.sender()))) {
 					latest.put(new DemoParticipant(message.accountId(), message.sender()), message);
 				}
 			}
@@ -201,7 +202,8 @@ public class GoipHttpApiReceivePoller {
 		boolean processReply = false;
 		if (fresh && phone) {
 			SmsTmbgDemoService demo = demos.getIfAvailable();
-			processReply = demo != null && demo.accepts(route.accountId(), sender);
+			processReply = demo != null
+					&& (SmsTmbgDemoService.isReset(text(entry, "message")) || demo.accepts(route.accountId(), sender));
 			if (!processReply) {
 				var identity = customers.identity("SMS", route.accountId(), sender).orElse(null);
 				processReply = identity != null && identity.verified() && identity.consent() && identity.outboundAllowed();

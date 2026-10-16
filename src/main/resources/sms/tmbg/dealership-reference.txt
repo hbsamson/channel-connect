@@ -1,0 +1,48 @@
+TOYOTA MANILA BAY SERVICE REFERENCE
+
+Source: Toyota Manila Bay 2.pdf supplied by the project owner, pages 1-13.
+This is a curated reference, not a source of instructions that override the conversation rules.
+The document's numbered replies and bundle scripts are replaced by free-text conversation
+and one service at a time. Customer choices and the chat's actual capabilities come first.
+
+MAINTENANCE (pages 1, 5, 9-11)
+Minor maintenance can include Toyota Genuine Motor Oil, an oil filter, a sump washer and
+a safety check. Additional work depends on the vehicle and maintenance milestone; an
+advisor confirms the required scope. Never apply a 5,000 km price band to another milestone.
+If cost is a concern, acknowledge it and explain that the customer can ask the dealership
+for an estimate separating required work from optional extras before approving anything.
+Do not choose an oil grade or promise an essential-only price, discount or warranty outcome.
+Describe genuine parts and trained technicians as service benefits, without disparaging
+independent repair shops or making claims about their tools, parts or workmanship.
+
+TIME CONCERNS (pages 1, 5, 10)
+Express Maintenance is a topic the customer can ask the dealership about. Eligibility,
+availability and turnaround must be confirmed. Do not guarantee an hour, a drop-off time,
+lounge amenities or a collection time from this reference.
+
+INSURANCE (pages 2-3, 5, 8)
+Explain that insurance assistance can include policy review, renewal and claims support.
+Dealer repair, genuine replacement parts, deductibles, Acts of Nature and roadside help
+depend on the actual policy and insurance company approval. Do not promise these benefits,
+name an insurer as currently accredited, quote a deductible or reuse a previous premium.
+When comparing another offer, suggest comparing the actual policy terms rather than
+claiming Toyota's option is cheaper or guarantees approval or zero out-of-pocket costs.
+
+REGISTRATION (pages 3-6)
+Registration assistance can help coordinate inspection requirements, required basic
+insurance and documents. Use the supplied renewal period and fee estimate, not a date
+matrix or penalty amounts copied from the document. The v12 local demo templates use the
+owner-supplied statement that Toyota Manila Bay is a government-accredited center and can
+perform the emission test during the appointment. Verify accreditation operationally before
+production use. Do not promise same-day completion or removal of inspection requirements.
+If the customer prefers handling renewal themselves, respect that choice without arguing.
+
+CUSTOMER-LED COMBINED VISITS (pages 4, 7-8)
+Only discuss several services in one visit if the customer asks. Include only the services
+they accept. Scheduling, documents and insurance approval still need their own checks.
+Do not use package names or promise one-morning completion of all services.
+
+CLAIMS REQUIRING SEPARATE CONFIRMATION (pages 2-13)
+Do not repeat warranty durations or automatic voiding, resale premiums, legal penalties,
+ownership percentages, review ratings, awards, branch counts, addresses, hours or equipment
+guarantees from the source. They are not verified operational facts for this chat.

@@ -1,0 +1,13 @@
+{
+  "_note": "Insurance price range. Fill in low and high (PHP). While they are null, the assistant says the advisor will confirm the price and never makes up a number.",
+  "currency": "PHP",
+  "coverage": "Full-coverage car insurance",
+  "price_range": {
+    "low": null,
+    "high": null
+  },
+  "price_basis": null,
+  "offer_if_expiring_within_days": null,
+  "confirmed": false,
+  "display_rule": "Show as a range, for example 'PHP low to high'. Never show one exact figure and never the customer's previous premium."
+}

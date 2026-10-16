@@ -1,5 +1,5 @@
 {
-  "_note": "Invented demo data. Phones use the +639170000xxx test range. All enrichment values are null or demo; nothing here is a real price, fee or rate.",
+  "_note": "Customer records for the campaign. All prices are estimates unless marked confirmed.",
   "records": [
     {
       "payload_id": "pl_3in1_0001",
@@ -7,17 +7,17 @@
       "script_id": "S3",
       "segment": "reaching_third_anniversary",
       "reg_segment_band": "1 opens within 7 days",
-      "list_id": "TMBG-3IN1-DEMO",
+      "list_id": "TMBG-3IN1",
       "build_tag": "v5",
       "as_of": "2026-10-14",
-      "customer_id": "CUS-DEMO-0001",
-      "first_name": "Amelia",
-      "full_name": "Amelia Reyes",
+      "customer_id": "CUS-0001",
+      "first_name": "Jae",
+      "full_name": "Jae Guanio",
       "phone": "+639170000011",
       "email": null,
-      "vin": "DEMOVIN0000000001",
+      "vin": "VIN0000000001",
       "plate": "TST 3080",
-      "model_description": "Vios 1.3 XLE CVT",
+      "model_description": "Land Cruiser 300 3.5 V6 ZX HEV",
       "reg_base_date": "2023-10-20",
       "service_state": "due_soon",
       "last_pms_date": "2026-04-20",
@@ -29,28 +29,16 @@
       "reg_window_end": "2026-10-21",
       "enrichment": {
         "pms_milestone_km": 30000,
-        "pms_price": null,
-        "reg_service_fee": null,
+        "pms_price": "PHP 3,000 to 5,500+",
+        "pms_price_band": "large_or_hybrid",
+        "reg_service_fee": "PHP 1,250",
         "mvuc_fee": null,
         "reg_service_mode": null,
         "petc_accredited": null,
         "collection_available": false,
         "collection_note": null,
-        "branch": "DEMO-BRANCH-1",
-        "branch_name": "Toyota Manila Bay Demo Branch",
-        "slots": [
-          "2026-10-16T09:00",
-          "2026-10-16T13:00",
-          "2026-10-17T09:00",
-          "2026-10-17T13:00",
-          "2026-10-19T09:00",
-          "2026-10-19T13:00",
-          "2026-10-20T10:00",
-          "2026-10-20T14:00",
-          "2026-10-21T09:00",
-          "2026-10-21T13:00"
-        ],
-        "demo": true
+        "branch": "BRANCH-1",
+        "branch_name": "Toyota Manila Bay Branch"
       }
     }
   ]
