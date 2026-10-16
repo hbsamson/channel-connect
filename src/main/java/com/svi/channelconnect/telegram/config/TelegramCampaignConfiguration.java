@@ -31,6 +31,7 @@ import com.svi.channelconnect.telegram.service.TelegramIdentityLinker;
 import com.svi.channelconnect.telegram.service.TelegramMessagingChannel;
 import com.svi.channelconnect.telegram.service.TelegramOutboundMessageService;
 import com.svi.channelconnect.telegram.service.TelegramRequestIdempotencyStore;
+import com.svi.channelconnect.telegram.service.TelegramTmbgDemoService;
 
 @Configuration(proxyBeanMethods = false)
 @Profile({"local", "test"})
@@ -70,8 +71,8 @@ public class TelegramCampaignConfiguration {
 	TelegramOutboundMessageService telegramOutboundMessageService(DealershipRepository customers, CampaignService campaigns,
 			TelegramCampaignPolicy policy, TelegramMessagingChannel channel,
 			TelegramRequestIdempotencyStore<TelegramOutboundMessageRequest, TelegramOutboundMessageResponse> requests, Clock clock,
-			DemoConfiguration configuration, DealershipProperties dealership, CampaignTemplates templates) {
-		return new TelegramOutboundMessageService(customers, campaigns, policy, channel, requests, clock, configuration, dealership, templates);
+			TelegramTmbgDemoService bookingDemo) {
+		return new TelegramOutboundMessageService(customers, campaigns, policy, channel, requests, clock, bookingDemo);
 	}
 
 	@Bean

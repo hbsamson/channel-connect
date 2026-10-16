@@ -3,7 +3,10 @@ package com.svi.channelconnect.telegram.config;
 import java.net.http.HttpClient;
 import java.time.Clock;
 
+import com.svi.channelconnect.dealership.persistence.DealershipRepository;
+import com.svi.channelconnect.dealership.service.CampaignService;
 import com.svi.channelconnect.dealership.service.DealershipConversationService;
+import com.svi.channelconnect.dealership.service.TmbgBookingAssistant;
 import com.svi.channelconnect.telegram.client.TelegramApiClient;
 import com.svi.channelconnect.telegram.controller.TelegramWebhookController;
 import com.svi.channelconnect.telegram.exception.TelegramExceptionHandler;
@@ -14,10 +17,12 @@ import com.svi.channelconnect.telegram.service.InMemoryTelegramInboundMessageDis
 import com.svi.channelconnect.telegram.service.TelegramInboundMessageDispatcher;
 import com.svi.channelconnect.telegram.service.TelegramMessageProcessingService;
 import com.svi.channelconnect.telegram.service.TelegramMessagingChannel;
+import com.svi.channelconnect.telegram.service.TelegramTmbgDemoService;
 import com.svi.channelconnect.telegram.service.TelegramWebhookService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -71,9 +76,18 @@ public class TelegramConnectorConfig {
 	}
 
 	@Bean
+	@Profile({"local", "test"})
+	TelegramTmbgDemoService telegramTmbgDemoService(TmbgBookingAssistant assistant,
+			DealershipRepository customers, CampaignService campaigns, TelegramMessagingChannel channel,
+			TelegramProperties properties, Clock clock) {
+		return new TelegramTmbgDemoService(assistant, customers, campaigns, channel, properties, clock);
+	}
+
+	@Bean
 	TelegramMessageProcessingService telegramMessageProcessingService(
-			DealershipConversationService conversations, TelegramProperties properties, Clock clock) {
-		return new TelegramMessageProcessingService(conversations, properties, clock);
+			DealershipConversationService conversations, TelegramProperties properties, Clock clock,
+			ObjectProvider<TelegramTmbgDemoService> bookingDemo) {
+		return new TelegramMessageProcessingService(conversations, properties, clock, bookingDemo.getIfAvailable());
 	}
 
 	@Bean

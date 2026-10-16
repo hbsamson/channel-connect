@@ -24,25 +24,37 @@ profile's `.env` import. Existing application credentials are still required.
 | `TELEGRAM_DEDUPLICATION_TTL` | `24h` | 1 second–7 days after completion |
 | `TELEGRAM_SHUTDOWN_TIMEOUT` | `10s` | 1–60 seconds |
 
-Incoming messages use the same `DealershipConversationService` as WhatsApp and
-the shared dealership assistant used by the regular SMS workflow. This supplies
-the configured dealership prompt, approved service catalog, campaign configuration,
-workflow, chronological history and conversation summary. Replies are stored and
-sent through the registered `TELEGRAM` channel. `AI_PROVIDER=mock` uses the shared
-deterministic dealership intent parser; it no longer returns a generic mock echo.
-Existing dealership and AI configuration applies; no new AI settings are required.
+With `local`/`test`, incoming messages use `TmbgBookingAssistant`, the same booking
+assistant used by the SMS, Messenger and WhatsApp demos. It loads the templates,
+system prompt, rules, negotiation playbook, service catalog, insurance prices and
+demo customer from `src/main/resources/sms/tmbg/`. Resources are shared rather than
+copied. Telegram uses full English/Taglish templates, without SMS length limits.
+`AI_PROVIDER=mock` uses the same deterministic TMBG flow; a configured real AI
+provider receives the same TMBG instructions and conversation state.
+
+Sessions are isolated by channel, bot ID and chat/topic ID. A new chat receives
+`OPEN_GREETING`; replies then follow the shared service-selection, registration,
+date/time and explicit booking-confirmation rules. Confirmed requests use the
+same `bookings.txt` output (or `sms.tmbg-bookings-file` override), with Telegram
+channel and sender metadata. Send `/reset` in Telegram to restart a demo session.
+Opt-out/wrong-person outcomes are persisted and block further outbound outreach;
+`/reset` does not restore consent. Booking sessions are process-local and are
+lost on restart; stored messages, bookings and opt-outs remain in their stores.
+
+Outside `local`/`test`, messages continue through `DealershipConversationService`
+and its configured dealership context and history. No new AI settings are required.
 
 Identities are scoped to the bot's numeric ID and the recipient's chat/topic ID.
-New identities are unverified and can ask general dealership questions; personal
-customer records and booking actions remain subject to the shared verification
-rules. A Telegram message does not automatically link a chat to an existing
-customer profile. The separate SMS/Messenger TMBG booking demo is not selected.
+New identities are unverified. A Telegram message does not automatically link a
+chat to an existing customer profile. Local/test TMBG conversations use the same
+fixed demo customer record as SMS; they do not load the linked dealership
+customer's personal details. Outbound REST calls still require a verified,
+consenting identity. Production dealership actions keep their verification rules.
 
 Messages sent directly to Telegram's `sendMessage` API bypass this application
-and are not added to its history or campaign workflow. Incoming replies still use
-dealership context, but the assistant cannot see that externally sent campaign
-text. Use the direct-send or campaign-start endpoint below to retain outgoing
-messages as conversation context instead of calling Telegram's API directly.
+and do not initialize its TMBG session or enter its message history. Use the
+recipient-only direct-send endpoint below to send the TMBG greeting and initialize
+the matching conversation instead of calling Telegram's API directly.
 
 ## Repeatable demo sends, equivalent to the SMS messages API
 
@@ -55,11 +67,10 @@ campaign, so a previous campaign's `COMPLETED` status does not prevent sending.
 The route uses the existing local/test outbound settings and bearer token:
 `TELEGRAM_ENABLED=true`, `TELEGRAM_CAMPAIGN_ENABLED=true`,
 `TELEGRAM_CAMPAIGN_API_TOKEN` and `TELEGRAM_CAMPAIGN_ALLOWED_RECIPIENTS`.
-Omit `content` to have the application render the approved dealership opener
-using the linked customer's name, vehicle, renewal details and campaign context.
-This uses the default `opening` allowlist entry and does not require `custom`.
-It uses the same campaign snapshot as the dealership assistant's subsequent
-replies, or the configured dealership campaign when no snapshot exists.
+Omit `content` to render TMBG's approved `OPEN_GREETING` using the same demo
+customer data as SMS. This uses the default `opening` allowlist entry and does
+not require `custom`. After Telegram accepts the greeting, the application
+starts a fresh TMBG session so the next reply continues that offer.
 
 In Postman use Bearer Token with `TELEGRAM_CAMPAIGN_API_TOKEN`, raw JSON and these
 headers. `{{$guid}}` generates a new key per send; for a retry of an uncertain
@@ -76,21 +87,22 @@ Idempotency-Key: {{$guid}}
 }
 ```
 
-There is no LLM call to compose the opener: the approved script is personalized
-by the existing dealership template renderer, as in the managed campaign flow.
-The exact rendered text is saved in history. Each fresh key sends it again for
-demo purposes, even after a previous managed campaign completed.
+There is no LLM call to compose the opener: the shared TMBG assistant renders
+`OPEN_GREETING`. The exact rendered text is saved in history. Each fresh key
+sends it again and restarts the TMBG session, even after a previous booking or
+managed campaign completed. Replaying the same key does not reset the session.
 
 For an explicit manual message, supply `content` (for example, `"Hello World"`).
-That mode requires appending `custom` to the script allowlist and restarting:
+That mode retains the current TMBG session and does not add custom text to the
+assistant's internal history. It requires appending `custom` to the script
+allowlist and restarting:
 
 ```dotenv
 TELEGRAM_CAMPAIGN_ALLOWED_SCRIPTS=opening,followup1,followup2,script1,script3,custom
 ```
 
 `content` may be omitted or null for the approved opener. Empty or whitespace-only
-content is rejected. Missing required customer template details also return 400
-without making a Telegram request.
+content is rejected.
 
 There is no `customerId` field: the API uses the chat's existing verified,
 consenting customer identity. The customer must already have messaged the bot
@@ -107,8 +119,9 @@ call; the same key with different content returns 409. Use a new key for each
 intentional additional message.
 
 The outgoing message is stored in dealership history before submission, with the
-provider outcome recorded afterward. The next customer reply can use its content
-as context. Existing campaign state, bookings and opt-out state are retained.
+provider outcome recorded afterward. Automatic greetings initialize the shared
+TMBG conversation context. Existing managed campaign records, saved bookings and
+opt-out state are retained.
 Messages are plain text, at most 4096 characters. The 16 KiB request limit and
 bounded process-local idempotency policy also apply to direct sends, with a
 separate request cache from campaign starts. Timeout/network/invalid-response
@@ -124,8 +137,10 @@ them for production delivery or replay protection across restarts.
 `local`/`test`, `TELEGRAM_ENABLED=true`, and `TELEGRAM_CAMPAIGN_ENABLED=true`.
 It reuses the existing dealership campaign engine, scripts, opt-out handling,
 quiet hours, attempt limits, persistence and conversation history. Incoming
-webhook replies stop campaign follow-ups and use the linked customer context.
+webhook replies stop campaign follow-ups and enter the TMBG demo in local/test.
 It starts a Telegram-only campaign; other channels are not used as fallback.
+This managed endpoint retains its separately configured dealership campaign
+scripts. For the repeatable TMBG opening and booking flow, use `/messages` above.
 
 Configure these values in your local `.env` (keep real tokens and recipients
 outside source control):
