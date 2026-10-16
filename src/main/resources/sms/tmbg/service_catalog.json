@@ -5,8 +5,8 @@
     {
       "id": "renewal",
       "priority": 1,
-      "name_en": "registration renewal",
-      "name_tl": "registration renewal",
+      "name_en": "LTO Registration Renewal",
+      "name_tl": "LTO Registration Renewal",
       "what_it_is": "Renewal of the car's registration, with the required basic insurance renewed together with it.",
       "price": {
         "service_fee": 1250,
@@ -14,7 +14,7 @@
         "extra": "Government registration charges are extra, at actual cost, and fixed by law. They cannot be discounted.",
         "confirmed": false
       },
-      "offer_when": "After the combined opening offer is declined, offer this first individually. Give reg_window_start through reg_window_end as a period. Record the answer, then ask about maintenance even after a refusal.",
+      "offer_when": "Use when registration renewal is chosen or asked about. Give reg_window_start through reg_window_end as a period. After an explicit selection proceed to scheduling for the chosen services only; never offer omitted services.",
       "skip_when": [
         "The customer says it is already renewed.",
         "The customer declined it."
@@ -24,8 +24,8 @@
     {
       "id": "pms",
       "priority": 2,
-      "name_en": "regular maintenance",
-      "name_tl": "regular maintenance",
+      "name_en": "Preventative Maintenance Service",
+      "name_tl": "Preventative Maintenance Service",
       "what_it_is": "Regular maintenance of the car at the branch.",
       "price": {
         "basis": "5,000 km service. For another km reading, the advisor confirms the amount.",
@@ -52,7 +52,7 @@
         ],
         "if_model_unknown": "Say the advisor will confirm the amount for the car."
       },
-      "offer_when": "Always ask second, after registration renewal has been answered, whether accepted, declined or skipped. Then ask about insurance.",
+      "offer_when": "Use when maintenance is chosen or asked about. Explicit selection proceeds to scheduling without asking about omitted services. Retain second priority only for an existing legacy individual-offer flow.",
       "skip_when": [
         "The customer says the car was just serviced.",
         "The customer declined it."
@@ -67,15 +67,15 @@
     {
       "id": "insurance",
       "priority": 3,
-      "name_en": "car insurance",
-      "name_tl": "car insurance",
+      "name_en": "Comprehensive Insurance Renewal",
+      "name_tl": "Comprehensive Insurance Renewal",
       "what_it_is": "Full-coverage car insurance (comprehensive). The required basic insurance is separate: it is renewed together with the registration and is part of the registration renewal.",
       "price": {
         "source_file": "insurance_prices.json",
         "if_range_missing": "Say the advisor will confirm the price. Never quote the previous premium as the new price.",
         "confirmed": false
       },
-      "offer_when": "Always ask third, after registration and maintenance have been answered, even if both were refused or the record says insurance is active. Do not assume renewal is due.",
+      "offer_when": "Use when insurance is chosen or asked about. Never add insurance to a maintenance/registration choice. Do not assume renewal is due. Retain third priority only for an existing legacy individual-offer flow.",
       "skip_when": [
         "After being asked, the customer says insurance is still active, already renewed or not needed."
       ],

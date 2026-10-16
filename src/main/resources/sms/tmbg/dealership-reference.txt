@@ -31,9 +31,10 @@ claiming Toyota's option is cheaper or guarantees approval or zero out-of-pocket
 REGISTRATION (pages 3-6)
 Registration assistance can help coordinate inspection requirements, required basic
 insurance and documents. Use the supplied renewal period and fee estimate, not a date
-matrix or penalty amounts copied from the document. Emission testing is at an accredited
-center unless the record explicitly confirms branch accreditation. Do not claim on-site
-testing, same-day completion, or that online renewal removes inspection requirements.
+matrix or penalty amounts copied from the document. The v12 local demo templates use the
+owner-supplied statement that Toyota Manila Bay is a government-accredited center and can
+perform the emission test during the appointment. Verify accreditation operationally before
+production use. Do not promise same-day completion or removal of inspection requirements.
 If the customer prefers handling renewal themselves, respect that choice without arguing.
 
 CUSTOMER-LED COMBINED VISITS (pages 4, 7-8)

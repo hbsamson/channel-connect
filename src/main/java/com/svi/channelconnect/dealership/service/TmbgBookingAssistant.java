@@ -6,10 +6,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -47,6 +50,10 @@ public class TmbgBookingAssistant {
 	private static final Set<String> DECISIONS = Set.of("accepted", "declined", "skipped");
 	private static final Pattern FALSE_CONFIRMATION = Pattern.compile("(?i)\\b(confirmed|booked|TMB-\\d+)\\b");
 	private static final Pattern INTERNAL_LABEL = Pattern.compile("(?i)\\bdemo\\b");
+	private static final Pattern DATE_REFERENCE = Pattern.compile("(?i)\\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?"
+			+ "|january|february|march|april|may(?=\\s+\\d)|june|july|august|september|october|november|december"
+			+ "|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|today|tomorrow|bukas|ngayon"
+			+ "|lunes|martes|miyerkules|huwebes|biyernes|sabado|linggo|\\d{1,4}[-/]\\d{1,2}|\\d{1,2})\\b");
 	private static final Map<String, Pattern> CONVERSATIONAL_OPENERS = conversationalOpeners();
 	private static final String CAPABILITY_RULES = """
 
@@ -66,12 +73,17 @@ public class TmbgBookingAssistant {
 		The service records explicit selections and proceeds directly to dates without offering omitted services. Do not pitch or repeat an unselected service. Bundle refusal alone sends SERVICE_CHOICE_PIVOT; a refusal of all services closes politely.
 		A bare yes to an existing individual offer accepts only the current service; a no declines only that service. Already completed means skipped. Legacy individual offers may still advance until the customer explicitly selects their desired services.
 		Never request booking or dates until all_services_answered is true. This flag also becomes true when the customer explicitly completes their service selection; it does not require asking about omitted services. If no services were accepted, close without booking.
-		Only after all three decisions, a clear date selection inside booking_window_start_iso through booking_window_end_iso requests booking_requested.
-		Set slot to the selected ISO date (YYYY-MM-DD), without a time. There are no configured appointment hours or capacity guarantees.
+		After service selection, a clear date selection sets message_intent=date_selection and slot=YYYY-MM-DD. It never saves a booking.
+		Dates are next calendar week's Monday-Friday in Asia/Manila, intersected with the actual renewal window only when renewal is selected. Use only dates in slots_offered.
+		After a date, ask for a preferred vehicle drop-off time from 8:00 AM to 2:00 PM inclusive in Asia/Manila. These are request hours, not available slots or capacity guarantees.
+		For a clear time choice set message_intent=time_selection and selected_time=HH:mm in 24-hour Manila time. Preserve the chosen date; never treat a bare hour as a new day while a time is pending. Do not guess AM/PM if ambiguous.
+		Set selected_time to null for questions, tentative choices or refusals. Date and time may be supplied together. Ask for explicit confirmation of both before saving.
+		Only a clear affirmative reply while BOOKING_CONFIRMATION_PENDING requests outcome=booking_requested and message_intent=booking_confirmation. Never treat a new time, date, question or service choice as final confirmation.
+		Every booking message must name the exact services in services_list, including time offers, invalid choices, confirmation, errors and the recorded request. Never add an unselected service or use generic 'selected services'.
 		Availability questions, refusals, tentative dates and ambiguous choices are not selections. A clear request such as "Can you book me for October 19?" is a selection.
 		Present the inclusive date window, not a fixed menu of appointment times. Ask which day works. Never show internal codes or numbered reply instructions.
 		GENERAL DEALERSHIP QUESTIONS: Use APPROVED DEALERSHIP KNOWLEDGE to answer questions about Toyota Manila Bay and its services at any stage.
-		Use AI reasoning to answer the actual question using the supplied facts. Templates and approved answers are reference material, not mandatory scripts. Set message_intent to question, decision, date_selection or other. Questions must not record service decisions. For supported questions, compose a concise reply_text and optionally identify knowledge_topic; a null reply uses the approved answer as fallback.
+		Use AI reasoning to answer the actual question using the supplied facts. Templates and approved answers are reference material, not mandatory scripts. Set message_intent to question, decision, date_selection, time_selection, booking_confirmation or other. Questions must not record service decisions. For supported questions, compose a concise reply_text and optionally identify knowledge_topic; a null reply uses the approved answer as fallback.
 		Only select a knowledge_topic if its answer actually addresses the latest question. Do not treat unrelated questions as dealership questions or repeat a sales pitch for missing facts.
 		Do not select a topic for booking commands, consent, opt-out, appointment changes, or vehicle-specific facts not covered by that answer. Set knowledge_topic to null otherwise.
 		AFTER CONFIRMED: Never restart booking, offer new slots, cancel, reschedule or claim changes were saved. For changes set outcome to booking_change; otherwise unsupported questions use outcome unavailable. General knowledge questions still use knowledge_topic.
@@ -200,7 +212,7 @@ public class TmbgBookingAssistant {
 			List<String> acknowledgements = new ArrayList<>();
 			for (String id : conversational.templateIds()) acknowledgements.add(render(id, session, fields));
 			String acknowledgement = String.join(" ", acknowledgements);
-			if (validSms(acknowledgement + " " + reply)) reply = acknowledgement + (reply.isBlank() ? "" : " " + reply);
+			if (validReply(acknowledgement + " " + reply, session)) reply = acknowledgement + (reply.isBlank() ? "" : " " + reply);
 		}
 		if (session.language.equals("en")) reply = fullEnglish(reply);
 		if (!previousStage.equals(session.stage)) {
@@ -264,6 +276,9 @@ public class TmbgBookingAssistant {
 		state.put("service_status", session.serviceStatus); state.put("service_in_focus", session.focus);
 		state.put("services_asked", session.servicesAsked); state.put("all_services_answered", allServicesAnswered(session));
 		state.put("service_selection_complete", session.serviceSelectionComplete);
+		state.put("selected_date", session.selectedDate == null ? null : session.selectedDate.toString());
+		state.put("selected_time", session.selectedTime == null ? null : session.selectedTime.toString());
+		state.put("time_zone", MANILA.getId());
 		return "RULES\n" + channelText(rules + CAPABILITY_RULES, session.channel)
 				+ "\nNEGOTIATION PLAYBOOK\n" + playbook
 				+ "\nSERVICE CATALOG\n" + json.writeValueAsString(serviceCatalog)
@@ -336,10 +351,10 @@ public class TmbgBookingAssistant {
 		String approved = knowledge.answer(answer.path("knowledge_topic").asString(""), session.language, session.channel);
 		if (question || approved != null) {
 			String text = answer.path("reply_text").asString("");
-			if (!outcome.equals("unavailable") && validSms(text) && !FALSE_CONFIRMATION.matcher(text).find()) return text;
+			if (!outcome.equals("unavailable") && validReply(text, session) && !FALSE_CONFIRMATION.matcher(text).find()) return text;
 			if (approved != null) return session.language.equals("en") ? fullEnglish(approved) : approved;
 			LOGGER.debug("Booking question fallback; stage={}, unsupported={}, validReply={}",
-					session.stage, outcome.equals("unavailable"), validSms(text));
+					session.stage, outcome.equals("unavailable"), validReply(text, session));
 			return chatUnavailable(session);
 		}
 		if (session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) return chatUnavailable(session);
@@ -348,6 +363,12 @@ public class TmbgBookingAssistant {
 			session.stage = "COMPLETED_NO_BOOKING";
 			return render("DECLINE_CLOSE", session, fields);
 		}
+		if (session.stage.equals("REG_STATUS_ASKED") && allServicesAnswered(session)) {
+			return session.registration.equals("unknown") ? render("REG_VALID_CHECK", session, fields)
+					: offerDates(session, phone(incoming.channel(), incoming.sender()));
+		}
+		if (Set.of("CALLBACK_ASK", "THINKING_TIME").contains(template)) return render(template, session, fields);
+		if (scheduling(session)) return bookingStep(session, incoming, answer, fields);
 		if (updateServices(session, answer, incoming.content())) {
 			return advanceServices(session, phone(incoming.channel(), incoming.sender()));
 		}
@@ -358,10 +379,7 @@ public class TmbgBookingAssistant {
 			session.stage = "SERVICE_OFFERED";
 			return render(serviceOffer(session), session, fields);
 		}
-		if (outcome.equals("booking_requested")) {
-			return answer.path("message_intent").asString("").equals("date_selection")
-					? book(session, incoming, answer, fields) : fallback(session, fields);
-		}
+		if (outcome.equals("booking_requested")) return fallback(session, fields);
 		if (template.startsWith("SLOTS_OFFER") || answer.path("state_after").asString().equals("SLOTS_OFFERED")) {
 			return allServicesAnswered(session) ? offerDates(session, phone(incoming.channel(), incoming.sender())) : fallback(session, fields);
 		}
@@ -369,7 +387,7 @@ public class TmbgBookingAssistant {
 		if (session.stage.equals("SLOTS_OFFERED") && session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
 		if (!answer.path("reply_text").isString()) return fallback(session, fields);
 		String text = answer.path("reply_text").asString();
-		if (!validSms(text) || FALSE_CONFIRMATION.matcher(text).find()) {
+		if (!validReply(text, session) || FALSE_CONFIRMATION.matcher(text).find()) {
 			LOGGER.debug("Booking response rejected; stage={}, reason=invalid_reply", session.stage);
 			return fallback(session, fields);
 		}
@@ -384,22 +402,98 @@ public class TmbgBookingAssistant {
 		return text;
 	}
 
-	private String book(Session session, Incoming incoming, JsonNode answer, Map<String, Object> fields) {
-		if (!allServicesAnswered(session)) return fallback(session, fields);
+	private boolean scheduling(Session session) {
+		return Set.of("SLOTS_OFFERED", "BOOKING_TIME_ASKED", "BOOKING_CONFIRMATION_PENDING").contains(session.stage);
+	}
+
+	private String bookingStep(Session session, Incoming incoming, JsonNode answer, Map<String, Object> fields) {
 		if (session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
-		String code = answer.path("slot").asString("");
-		if (!session.slots.containsKey(code)) {
-			LOGGER.debug("Booking date rejected; stage={}, reason=outside_offered_window", session.stage);
-			return fallback(session, fields);
+		if (fields.get("window_status").equals("closed") && session.registration.equals("unknown")) {
+			session.stage = "REG_STATUS_ASKED";
+			return render("REG_VALID_CHECK", session, fields);
 		}
-		if (!session.stage.equals("SLOTS_OFFERED") || session.services.isEmpty()
+		String content = incoming.content();
+		if (session.stage.equals("BOOKING_CONFIRMATION_PENDING") && "declined".equals(explicitDecision(session, content))) {
+			session.selectedTime = null;
+			session.stage = "BOOKING_TIME_ASKED";
+			return render("BOOKING_TIME_OFFER", session, fields(session, phone(incoming.channel(), incoming.sender())));
+		}
+		if (!definiteChoice(content)) return fallback(session, fields);
+		TmbgBookingTime.Choice time = TmbgBookingTime.parse(content, session.selectedDate != null);
+		String intent = answer.path("message_intent").asString("");
+		String date = chosenSlot(session, time.mentioned() ? time.dateText() : content);
+		if (date == null && intent.equals("date_selection")) date = answer.path("slot").asString("");
+		boolean invalidDate = date != null && !date.isBlank()
+				&& (!session.slots.containsKey(date) || !availableDates(session).containsKey(date));
+		String dateText = time.mentioned() ? time.dateText() : content;
+		if ((date == null || date.isBlank()) && (!time.mentioned() || time.time() != null)
+				&& DATE_REFERENCE.matcher(dateText).find()) invalidDate = true;
+		if (invalidDate) {
+			session.selectedDate = null;
+			session.selectedTime = null;
+			session.stage = "SLOTS_OFFERED";
+			return availableDates(session).isEmpty() ? noSlots(session) : render("SLOT_UNAVAILABLE", session, fields);
+		}
+		if (date != null && !date.isBlank()) {
+			session.selectedDate = LocalDate.parse(date);
+			session.selectedTime = null;
+			session.stage = "BOOKING_TIME_ASKED";
+		}
+		LocalTime selectedTime = time.time();
+		if (!time.mentioned() && Set.of("date_selection", "time_selection").contains(intent) && answer.path("selected_time").isString()) {
+			// Natural-language expressions may be interpreted by the model; validate its normalized value.
+			String value = answer.path("selected_time").asString();
+			if (value.matches("(?:[01]\\d|2[0-3]):[0-5]\\d")) selectedTime = LocalTime.parse(value);
+		}
+		if (session.selectedDate != null && (time.mentioned() || selectedTime != null || intent.equals("time_selection"))) {
+			session.selectedTime = null;
+			session.stage = "BOOKING_TIME_ASKED";
+			if (!TmbgBookingTime.valid(selectedTime)) {
+				return render("BOOKING_TIME_INVALID", session, fields(session, phone(incoming.channel(), incoming.sender())));
+			}
+			session.selectedTime = selectedTime;
+			session.stage = "BOOKING_CONFIRMATION_PENDING";
+			return render("BOOKING_TIME_CONFIRM", session, fields(session, phone(incoming.channel(), incoming.sender())));
+		}
+		if (date != null && !date.isBlank()) {
+			return render("BOOKING_TIME_OFFER", session, fields(session, phone(incoming.channel(), incoming.sender())));
+		}
+		if (session.stage.equals("BOOKING_CONFIRMATION_PENDING")) {
+			if (bookingConfirmed(session, content) || intent.equals("booking_confirmation")
+					&& answer.path("outcome").asString("").equals("booking_requested")) return book(session, incoming, answer, fields);
+		}
+		return fallback(session, fields);
+	}
+
+	private boolean definiteChoice(String content) {
+		String text = content.toLowerCase(Locale.ROOT).trim();
+		if (text.matches("(?s).*\\b(maybe|perhaps|tentative|not sure|if|might|not|don't|cannot|can't|no|never|hindi|ayoko|huwag|baka|siguro)\\b.*")) return false;
+		if (text.matches("^(?:is|are|what|which|when|anong|kailan)\\b.*")) return false;
+		return !text.contains("?") || text.matches("^(?:please )?(?:(?:can|could|would) you (?:please )?)?(?:book|reserve|schedule|submit)\\b.*");
+	}
+
+	private boolean bookingConfirmed(Session session, String content) {
+		String text = content.toLowerCase(Locale.ROOT).trim().replaceAll(",\\s*", " ");
+		return "accepted".equals(explicitDecision(session, text))
+				|| text.matches("(?:yes[, ]+)?(?:please )?(?:confirm|submit(?: it| the request)?|go ahead(?: and submit)?|that's correct|that is correct|tama(?: po)?|ituloy(?: po)?|i-confirm(?: po)?)[.! ]*");
+	}
+
+	private String book(Session session, Incoming incoming, JsonNode answer, Map<String, Object> fields) {
+		if (!allServicesAnswered(session) || !session.stage.equals("BOOKING_CONFIRMATION_PENDING")
+				|| session.selectedDate == null || !TmbgBookingTime.valid(session.selectedTime)) return fallback(session, fields);
+		if (session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
+		if (session.services.isEmpty()
 				|| (session.registration.equals("unknown") && fields.get("window_status").equals("closed"))) return fallback(session, fields);
-		String selected = session.slots.get(code);
-		if (!availableDates().containsValue(selected)) {
-			session.slots = availableDates();
+		String code = session.selectedDate.toString();
+		if (!availableDates(session).containsKey(code)) {
+			session.slots = availableDates(session);
+			session.selectedDate = null;
+			session.selectedTime = null;
+			session.stage = "SLOTS_OFFERED";
 			if (session.slots.isEmpty()) return noSlots(session);
 			return render("SLOT_TAKEN", session, fields(session, phone(incoming.channel(), incoming.sender())));
 		}
+		String selected = session.selectedDate.atTime(session.selectedTime).atZone(MANILA).toOffsetDateTime().toString();
 		List<String> services = new ArrayList<>();
 		for (JsonNode value : answer.path("outcome_data").path("services")) {
 			if (!SERVICES.contains(value.asString())) return fallback(session, fields);
@@ -423,13 +517,15 @@ public class TmbgBookingAssistant {
 			booking.put("channel", incoming.channel()); booking.put("sender_id", incoming.sender());
 		}
 		booking.put("slot_code", code); booking.put("appointment", selected); booking.put("services", services);
+		booking.put("appointment_date", code); booking.put("appointment_time", session.selectedTime.toString());
+		booking.put("time_zone", MANILA.getId()); booking.put("customer_confirmed", true);
 		booking.put("services_asked", List.copyOf(session.servicesAsked)); booking.put("all_services_answered", true);
 		booking.put("service_selection_complete", session.serviceSelectionComplete);
 		booking.put("created_at", clock.instant().atZone(MANILA).toOffsetDateTime().toString());
-		fields.put("booking_ref", reference); fields.put("slot_selected", label(selected));
-		fields.put("services_list", String.join(", ", session.services.stream().map(this::serviceName).toList()));
+		fields.put("booking_ref", reference);
+		fields.put("slot_selected", label(code) + " at " + TmbgBookingTime.label(session.selectedTime));
 		String confirmation = render("BOOKING_CONFIRMED", session, fields);
-		if (!validSms(confirmation)) return render("BOOKING_ERROR", session, fields);
+		if (!validReply(confirmation, session)) return render("BOOKING_ERROR", session, fields);
 		try {
 			Files.writeString(bookingsFile, json.writeValueAsString(booking) + System.lineSeparator(), StandardCharsets.UTF_8,
 					StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -444,9 +540,20 @@ public class TmbgBookingAssistant {
 
 	private JsonNode mockAnswer(Session session, String text, Map<String, Object> fields) {
 		String normalized = text.toLowerCase(Locale.ROOT);
+		if (normalized.matches("(?s).*\\b(person|advisor|agent|tao|callback|call me)\\b.*")) {
+			return json.valueToTree(Map.of("lang", session.language, "outcome", "handoff"));
+		}
 		List<String> selected = mockServiceSelection(text);
 		if (!selected.isEmpty() && !Set.of("CONFIRMED", "COMPLETED_NO_BOOKING").contains(session.stage)) {
 			return json.valueToTree(Map.of("lang", session.language, "message_intent", "decision", "selected_services", selected));
+		}
+		if (scheduling(session) && definiteChoice(text)) {
+			var time = TmbgBookingTime.parse(text, session.selectedDate != null);
+			String date = chosenSlot(session, time.mentioned() ? time.dateText() : text);
+			if (time.mentioned() || date != null || bookingConfirmed(session, text)
+					|| "declined".equals(explicitDecision(session, text))) {
+				return json.valueToTree(Map.of("lang", session.language, "message_intent", "other"));
+			}
 		}
 		String topic = normalized.matches("(?s).*\\b(magkano|how much|cost|fees?)\\b.*") ? "" : knowledge.mockTopic(text);
 		if (!topic.isEmpty() || session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) {
@@ -455,22 +562,20 @@ public class TmbgBookingAssistant {
 		}
 		String template;
 		String stage = session.stage;
-		String code = chosenSlot(session, text);
 		Map<String, Object> answer = new LinkedHashMap<>();
-		if (session.stage.equals("SLOTS_OFFERED") && code != null) {
-			answer.put("message_intent", "date_selection");
-			answer.put("lang", session.language); answer.put("outcome", "booking_requested"); answer.put("slot", session.slots.get(code));
-			answer.put("reply_text", null); answer.put("outcome_data", Map.of("services", session.services));
-			return json.valueToTree(answer);
-		} else if (normalized.matches("(?s).*\\b(person|advisor|agent|tao|callback|call me)\\b.*")) {
-			answer.put("lang", session.language); answer.put("outcome", "handoff");
-			return json.valueToTree(answer);
-		} else if (normalized.matches("(?s).*\\b(busy|not now|mamaya)\\b.*")) {
+		if (normalized.matches("(?s).*\\b(busy|not now|mamaya)\\b.*")) {
 			template = "CALLBACK_ASK";
 		} else if (normalized.matches("(?s).*\\b(price|cost|magkano|fees?|how much)\\b.*")) {
+			answer.put("message_intent", "question");
 			template = "insurance".equals(session.focus) ? "INSURANCE_PRICE_INFO"
 					: "renewal".equals(session.focus) ? "FEES" : "PMS_PRICE_INFO";
-		} else if (normalized.contains("ctpl")) template = "BASIC_INSURANCE_INFO";
+		} else if (normalized.matches("(?s).*\\bemission\\b.*")) {
+			answer.put("message_intent", "question");
+			template = "EMISSION";
+		} else if (normalized.contains("ctpl")) {
+			answer.put("message_intent", "question");
+			template = "BASIC_INSURANCE_INFO";
+		}
 		else if (session.stage.equals("REG_STATUS_ASKED") && "renewal".equals(session.focus) && session.registration.equals("not_yet")) {
 			template = serviceOffer(session);
 		} else if (session.stage.equals("SLOTS_OFFERED")) template = "SLOT_UNAVAILABLE";
@@ -511,6 +616,8 @@ public class TmbgBookingAssistant {
 			if (!value.isString() || !SERVICES.contains(value.asString()) || !choices.add(value.asString())) return false;
 		}
 		session.services = SERVICES.stream().filter(choices::contains).toList();
+		session.selectedDate = null;
+		session.selectedTime = null;
 		for (String service : SERVICES) {
 			session.serviceStatus.put(service, choices.contains(service) ? "accepted" : "skipped");
 		}
@@ -575,14 +682,28 @@ public class TmbgBookingAssistant {
 				reply = offerDates(session, phone);
 			}
 		}
-		return acknowledgement + " " + reply;
+		return session.focus == null ? reply : acknowledgement + " " + reply;
 	}
 
 	private String offerDates(Session session, String phone) {
 		if (!allServicesAnswered(session) || session.services.isEmpty()) return fallback(session, fields(session, phone));
 		Map<String, Object> fields = fields(session, phone);
 		if (session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
-		session.slots = availableDates();
+		if (fields.get("window_status").equals("closed") && session.registration.equals("unknown")) {
+			session.stage = "REG_STATUS_ASKED";
+			return render("REG_VALID_CHECK", session, fields);
+		}
+		if (session.registration.equals("renewed") && session.services.contains("renewal")) {
+			session.serviceStatus.put("renewal", "skipped");
+			session.services = session.services.stream().filter(service -> !service.equals("renewal")).toList();
+			if (session.services.isEmpty()) {
+				session.stage = "COMPLETED_NO_BOOKING";
+				return render("REG_ALREADY_RENEWED", session, fields);
+			}
+		}
+		session.selectedDate = null;
+		session.selectedTime = null;
+		session.slots = availableDates(session);
 		if (session.slots.isEmpty()) return noSlots(session);
 		session.stage = "SLOTS_OFFERED";
 		String template = session.serviceSelectionComplete && session.services.size() == 2 ? "TWO_SERVICES_SELECTED" : "SLOTS_OFFER";
@@ -622,8 +743,8 @@ public class TmbgBookingAssistant {
 	private String serviceName(String service) {
 		return switch (service) {
 			case "pms" -> "Preventative Maintenance Service";
-			case "insurance" -> "car insurance";
-			case "renewal" -> "registration renewal";
+			case "insurance" -> "Comprehensive Insurance Renewal";
+			case "renewal" -> "LTO Registration Renewal";
 			default -> throw new IllegalArgumentException("Unknown service");
 		};
 	}
@@ -643,12 +764,15 @@ public class TmbgBookingAssistant {
 		boolean mentionsRegistration = value.matches("(?s).*\\b(registration|rehistro|lto)\\b.*");
 		if (!mentionsRegistration && (!session.stage.equals("REG_STATUS_ASKED") && !"renewal".equals(session.focus)
 				|| value.matches("(?s).*\\b(insurance|policy)\\b.*"))) return;
-		if (value.matches("(?s).*(expired|lapsed|window has passed|since june).*")) session.registration = "expired";
+		if (session.stage.equals("REG_STATUS_ASKED") && allServicesAnswered(session)
+				&& value.matches("(?:yes|oo|opo|valid|still valid|valid pa)(?: po)?[.! ]*")) session.registration = "valid";
+		else if (value.matches("(?s).*(expired|lapsed|window has passed|since june).*")) session.registration = "expired";
 		else if (value.matches("(?s).*(not sure|unsure|hindi ko alam|di ko sure|nakalimutan).*")) session.registration = "unknown";
 		else if (value.matches("(?s).*(not yet|not renewed|haven't renewed|have not renewed|hindi.*pa.*renew|di.*pa.*renew|hindi pa|di pa|wala pa).*")) session.registration = "not_yet";
 		else if (value.matches("(?s).*(already renewed|na-renew ko na|narenew ko na|na-renew na|narenew na|tapos na|done na|last month pa).*")
 				|| value.matches("(renewed|na-renew|narenew)( na)?( po)?[.! ]*")) session.registration = "renewed";
 		else if (session.stage.equals("REG_STATUS_ASKED")) {
+			if (allServicesAnswered(session) && value.matches("(?:no|hindi|hindi na)(?: po)?[.! ]*")) session.registration = "expired";
 			if (value.matches("(yes|yes po|oo|opo|oo po)[.! ]*")) session.registration = "renewed";
 		}
 		if (session.registration.equals("not_yet") && today().isAfter(LocalDate.parse(customer.path("reg_window_end").asString()))) session.registration = "expired";
@@ -662,9 +786,12 @@ public class TmbgBookingAssistant {
 		fields.put("window_status", today().isBefore(start) ? "upcoming" : today().isAfter(end) ? "closed" : "open");
 		fields.put("opens_in_days", ChronoUnit.DAYS.between(today(), start)); fields.put("closes_in_days", ChronoUnit.DAYS.between(today(), end));
 		fields.put("reg_window_start", SHORT_DATE.format(start)); fields.put("reg_window_end", SHORT_DATE.format(end));
-		LocalDate first = today().isAfter(start) ? today() : start;
-		fields.put("booking_window_start", DATE_LABEL.format(first)); fields.put("booking_window_end", DATE_LABEL.format(end));
-		fields.put("booking_window_start_iso", first.toString()); fields.put("booking_window_end_iso", end.toString());
+		LinkedHashMap<String, String> dates = availableDates(session);
+		String first = dates.isEmpty() ? null : dates.keySet().iterator().next();
+		String last = dates.isEmpty() ? null : dates.sequencedKeySet().getLast();
+		fields.put("booking_window_start", first == null ? "no eligible dates" : label(first));
+		fields.put("booking_window_end", last == null ? "no eligible dates" : label(last));
+		fields.put("booking_window_start_iso", first); fields.put("booking_window_end_iso", last);
 		fields.put("first_name", customer.path("first_name").asString()); fields.put("plate", customer.path("plate").asString());
 		String model = customer.path("model_description").asString("your Toyota");
 		fields.put("full_name", customer.path("full_name").asString(customer.path("first_name").asString()));
@@ -681,21 +808,33 @@ public class TmbgBookingAssistant {
 				? "PHP " + priceRange.path("low").asString() + " to " + priceRange.path("high").asString() : "to be confirmed by an advisor");
 		fields.put("comp_expiry_date", customer.path("comp_expiry_date").isString()
 				? SHORT_DATE.format(LocalDate.parse(customer.path("comp_expiry_date").asString())) : "to be confirmed by an advisor");
-		fields.put("service_name", session.focus == null ? "service" : serviceName(session.focus));
+		fields.put("service_name", session.focus != null ? serviceName(session.focus)
+				: session.services.size() == 1 ? serviceName(session.services.getFirst()) : "service");
 		fields.put("services_list", String.join(" and ", session.services.stream().map(this::serviceName).toList()));
 		fields.put("next_service_name", SERVICES.stream().filter(service -> session.serviceStatus.get(service).equals("not_offered"))
 				.findFirst().map(this::serviceName).orElse("service"));
-		fields.put("slots_text", first.isAfter(end) ? "no dates available" : DATE_LABEL.format(first) + " to " + DATE_LABEL.format(end));
+		fields.put("slots_text", first == null ? "no dates available" : label(first) + " to " + label(last));
+		fields.put("selected_date", session.selectedDate == null ? "" : label(session.selectedDate.toString()));
+		fields.put("selected_time", session.selectedTime == null ? "" : TmbgBookingTime.label(session.selectedTime));
+		fields.put("drop_off_start", TmbgBookingTime.label(TmbgBookingTime.OPEN));
+		fields.put("drop_off_end", TmbgBookingTime.label(TmbgBookingTime.CLOSE));
+		fields.put("time_zone", MANILA.getId());
 		return fields;
 	}
 
-	private Map<String, String> availableDates() {
-		Map<String, String> slots = new LinkedHashMap<>();
-		LocalDate start = LocalDate.parse(customer.path("reg_window_start").asString());
-		LocalDate end = LocalDate.parse(customer.path("reg_window_end").asString());
+	private LinkedHashMap<String, String> availableDates(Session session) {
+		LinkedHashMap<String, String> slots = new LinkedHashMap<>();
+		LocalDate start = today().with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+		LocalDate end = start.plusDays(4);
+		if (session.services.contains("renewal")) {
+			LocalDate renewalStart = LocalDate.parse(customer.path("reg_window_start").asString());
+			LocalDate renewalEnd = LocalDate.parse(customer.path("reg_window_end").asString());
+			if (start.isBefore(renewalStart)) start = renewalStart;
+			if (end.isAfter(renewalEnd)) end = renewalEnd;
+		}
 		// A preferred day is a request, not a reservation of the branch's daily capacity.
-		for (LocalDate date = today().isAfter(start) ? today() : start; !date.isAfter(end); date = date.plusDays(1)) {
-			slots.put(date.toString(), date.toString());
+		for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+			if (date.getDayOfWeek() != DayOfWeek.SATURDAY && date.getDayOfWeek() != DayOfWeek.SUNDAY) slots.put(date.toString(), date.toString());
 		}
 		return slots;
 	}
@@ -752,24 +891,31 @@ public class TmbgBookingAssistant {
 		if (session.stage.equals("CONFIRMED") || session.stage.equals("COMPLETED_NO_BOOKING")) return chatUnavailable(session);
 		if (allServicesAnswered(session) && session.registration.equals("expired")) return render("DRIVE_IN_REFUSAL", session, fields);
 		if (session.stage.equals("SLOTS_OFFERED")) {
-			return availableDates().isEmpty() ? noSlots(session) : render("SLOTS_OFFER", session, fields);
+			return availableDates(session).isEmpty() ? noSlots(session) : render("SLOTS_OFFER", session, fields);
 		}
+		if (session.stage.equals("BOOKING_TIME_ASKED")) return render("BOOKING_TIME_OFFER", session, fields);
+		if (session.stage.equals("BOOKING_CONFIRMATION_PENDING")) return render("BOOKING_TIME_CONFIRM", session, fields);
+		if (session.stage.equals("REG_STATUS_ASKED") && allServicesAnswered(session)) return render("REG_VALID_CHECK", session, fields);
 		if (session.focus != null) {
 			if (session.stage.equals("REG_STATUS_ASKED")) return render("RENEWAL_NOT_SURE", session, fields);
 			return render(serviceOffer(session), session, fields);
 		}
-		if (allServicesAnswered(session) && availableDates().isEmpty()) return noSlots(session);
+		if (allServicesAnswered(session) && availableDates(session).isEmpty()) return noSlots(session);
 		return render("UNCLEAR", session, fields);
 	}
 
 	private String noSlots(Session session) {
-		return session.language.equals("tl") ? "Wala na pong natitirang petsa sa renewal period ninyo. Kontakin po ang Toyota Manila Bay para sa ibang petsa."
-				: "There are no remaining dates within your renewal period. Please contact Toyota Manila Bay for other dates.";
+		return render("DEMO_NO_ELIGIBLE_DATE", session, Map.of("services_list", String.join(" and ", session.services.stream().map(this::serviceName).toList())));
 	}
 
-	private String render(String id, Session session, Map<String, Object> fields) { return render(id, session.language, fields); }
+	private String render(String id, Session session, Map<String, Object> fields) {
+		return render(id, session.language, fields, session.channel.equals("SMS"));
+	}
 	private String render(String id, String language, Map<String, Object> fields) {
-		String text = templates.get(id).path(language).asString();
+		return render(id, language, fields, false);
+	}
+	private String render(String id, String language, Map<String, Object> fields, boolean sms) {
+		String text = templates.get(id).path(sms ? "sms_" + language : language).asString(templates.get(id).path(language).asString());
 		if ((id.startsWith("INSURANCE_") && id.contains("PRICE") || id.startsWith("INSURANCE_OFFER"))
 				&& !insurancePrices.path("price_range").path("low").isNumber()) {
 			text = templates.get(id).path("fallback_" + language).asString(text);
@@ -778,7 +924,7 @@ public class TmbgBookingAssistant {
 				|| customer.path("enrichment").path("pms_price").isMissingNode())) {
 			text = templates.get(id).path("fallback_" + language).asString(text);
 		}
-		for (var field : fields.entrySet()) text = text.replace("{{" + field.getKey() + "}}", field.getValue().toString());
+		for (var field : fields.entrySet()) text = text.replace("{{" + field.getKey() + "}}", field.getValue() == null ? "" : field.getValue().toString());
 		if (text.contains("{{")) return language.equals("tl") ? "Kukumpirmahin po ng advisor ang detalye."
 				: "Our advisor can confirm that detail.";
 		return language.equals("en") ? fullEnglish(text) : text;
@@ -801,9 +947,9 @@ public class TmbgBookingAssistant {
 				: "This chat can only answer general service questions right now. Please contact Toyota Manila Bay directly for further help.";
 	}
 
-	private boolean validSms(String text) {
+	private boolean validReply(String text, Session session) {
 		// All supplied templates use ordinary GSM-7 punctuation. Reject extended characters and Unicode.
-		return text != null && !text.isBlank() && text.length() <= 306
+		return text != null && !text.isBlank() && text.length() <= (session.channel.equals("SMS") ? 306 : 4096)
 				&& !INTERNAL_LABEL.matcher(text).find()
 				&& text.chars().allMatch(c -> c >= 32 && c <= 126 && "[]{}^|~`\\".indexOf(c) < 0);
 	}
@@ -828,6 +974,8 @@ public class TmbgBookingAssistant {
 		private String registration = "unknown";
 		private String language = "en";
 		private Map<String, String> slots = new LinkedHashMap<>();
+		private LocalDate selectedDate;
+		private LocalTime selectedTime;
 		private List<String> services = List.of();
 		private final Map<String, String> serviceStatus = new LinkedHashMap<>(Map.of("pms", "not_offered", "insurance", "not_offered", "renewal", "not_offered"));
 		private final Set<String> servicesAsked = new LinkedHashSet<>();

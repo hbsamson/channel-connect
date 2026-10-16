@@ -1,6 +1,6 @@
 {
-  "_note": "Placeholders in double braces are filled by the service from the customer record, the service catalog and the derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL). No template asks the customer to reply with a code, number or letter. Every price or fee is an estimate: always say around, usually or estimated, never quote it as exact. You may lightly reword a template to sound natural, but never change a number, date, fee, price, time or branch name. FLOW UPDATE: On a no to 3-in-1, send SERVICE_CHOICE_PIVOT (not RENEWAL_OFFER_OPEN). Follow only customer-selected service(s). Do not repeat car model, plate, expiry, or all three sales benefits after opening. Customer-facing name is Preventative Maintenance Service, never PMS. Do not promise 60-minute express, warranty protection, guaranteed claims or zero-cash-out unless separately verified. Never stack redundant acknowledgements. Booking and safety safeguards remain in force. V8: Explicitly selected two of three services (for example LTO Registration Renewal and Preventative Maintenance Service) proceed directly to the booking-date request; do not offer or ask about the unselected third service. Selection is interest in a visit request, not a confirmed reservation. Follow mandatory registration validity checks and service availability safeguards before booking.",
-  "version": "v8",
+  "_note": "Placeholders in double braces are filled by the service from the customer record, the service catalog and the derived fields. callback_time is filled by the assistant from the conversation. Templates with used_by = service (BOOKING_CONFIRMED, SLOT_TAKEN, BOOKING_ERROR) are sent by the service only and are never shown to the model. SMS text stays in the GSM-7 alphabet on purpose (see rules, SMS CHANNEL). No template asks the customer to reply with a code, number or letter. Every price or fee is an estimate: always say around, usually or estimated, never quote it as exact. You may lightly reword a template to sound natural, but never change a number, date, fee, price, time or branch name. FLOW UPDATE: On a no to 3-in-1, send SERVICE_CHOICE_PIVOT (not RENEWAL_OFFER_OPEN). Follow only customer-selected service(s). Do not repeat car model, plate, expiry, or all three sales benefits after opening. Customer-facing name is Preventative Maintenance Service, never PMS. Do not promise 60-minute express, warranty protection, guaranteed claims or zero-cash-out unless separately verified. Never stack redundant acknowledgements. Booking and safety safeguards remain in force. V8: Explicitly selected two of three services (for example LTO Registration Renewal and Preventative Maintenance Service) proceed directly to the booking-date request; do not offer or ask about the unselected third service. Selection is interest in a visit request, not a confirmed reservation. Follow mandatory registration validity checks and service availability safeguards before booking. V9: Friendly customer-facing language; booking sequence is date -> one of 9:00 AM or 1:00 PM (Asia/Manila) -> explicit confirmation -> persist request. These are preferred request times, not guaranteed available slots. Validate date, time and registration status server-side. Do not promise a reminder, callback, confirmation or proactive update unless supported by the dealership workflow. Insurance is subject to insurer terms and approval. Preserve approved OPEN_GREETING and RENEWAL_OFFER_OPEN message text. V10: Preferred booking time may be selected only within 8:00 AM to 4:00 PM inclusive (Asia/Manila). Do not restrict to the former 9:00 AM and 1:00 PM options. Offer only slots supported by the booking system for the selected date; do not invent availability. Validate time before saving. V11 DEMO ONLY: Offer booking dates in the next calendar week (Monday-Friday, Asia/Manila), excluding weekends, and intersect with actual eligibility/renewal dates from the customer record. For demo anchored to 2026-10-16, next week is October 19-23, 2026. Never offer a date outside the customer renewal window where applicable. If no eligible dates remain, explain and refer to dealership rather than invent dates. Toyota Manila Bay vehicle drop-off hours are 8:00 AM to 2:00 PM inclusive (Asia/Manila), subject to actual available slots. Replace all previous 4:00 PM and 9AM/1PM-only scheduling rules. Emission statement supplied by user: Toyota Manila Bay is a government-accredited center and can perform the test during appointment; verify dealership accreditation operationally before production use. V12: All booking-related customer messages explicitly name chosen services using {{services_list}} (or {{service_name}} for one service), never generic references such as selected services. Render the exact names chosen by customer, without adding an unselected service. Ensure service state populates placeholders for every booking message.",
+  "version": "v12-demo",
   "templates": [
     {
       "id": "OPEN_GREETING",
@@ -127,8 +127,8 @@
       "scenario": "Customer asks how much the maintenance is",
       "when": "Estimate only. If pms_price is null, use the fallback.",
       "used_by": "assistant",
-      "en": "For the 5,000 km service, the estimate is around {{pms_price}}. For your car's current km reading, an advisor confirms the final amount.",
-      "tl": "Para sa 5,000 km service, around {{pms_price}} po ang estimate. Para sa kasalukuyang km ng sasakyan, advisor po ang magkukumpirma ng final na halaga.",
+      "en": "For the 5,000 km service, the estimate is around {{pms_price}}. Our service advisor will be happy to confirm the final estimate based on your vehicle's current mileage.",
+      "tl": "Para sa 5,000 km service, around {{pms_price}} po ang estimate. Tutulungan po kayo ng service advisor na ma-confirm ang final estimate base sa current mileage ng sasakyan.",
       "fallback_en": "An advisor needs to confirm the maintenance estimate for your car and current km reading.",
       "fallback_tl": "Advisor po ang magkukumpirma ng maintenance estimate para sa sasakyan at kasalukuyang km nito."
     },
@@ -147,8 +147,8 @@
       "used_by": "assistant",
       "en": "We can help you explore comprehensive insurance renewal options. Would you like a quote?",
       "tl": "Pwede po namin kayong tulungan sa comprehensive insurance renewal options. Gusto po ba ninyong humingi ng quotation?",
-      "fallback_en": "An advisor can confirm a car insurance estimate. The insurance company still has to approve it. Would you like to discuss insurance?",
-      "fallback_tl": "Advisor po ang magkukumpirma ng estimate sa car insurance. Kailangan pa rin ng approval ng insurance company. Gusto po ninyong pag-usapan ang insurance?"
+      "fallback_en": "Our advisor can help you explore insurance options and provide an estimate. Applications are subject to the insurer's policies and approval. Would you like a quotation?",
+      "fallback_tl": "Matutulungan po kayo ng advisor sa insurance options at estimate. Subject po sa policies at approval ng insurance company ang application. Gusto po ba ninyo ng quotation?"
     },
     {
       "id": "INSURANCE_OFFER_LAPSED",
@@ -157,8 +157,8 @@
       "used_by": "assistant",
       "en": "We can help you explore comprehensive insurance renewal options. Would you like a quote?",
       "tl": "Pwede po namin kayong tulungan sa comprehensive insurance renewal options. Gusto po ba ninyong humingi ng quotation?",
-      "fallback_en": "An advisor can confirm a car insurance estimate. The insurance company still has to approve it. Would you like to discuss insurance?",
-      "fallback_tl": "Advisor po ang magkukumpirma ng estimate sa car insurance. Kailangan pa rin ng approval ng insurance company. Gusto po ninyong pag-usapan ang insurance?"
+      "fallback_en": "Our advisor can help you explore insurance options and provide an estimate. Applications are subject to the insurer's policies and approval. Would you like a quotation?",
+      "fallback_tl": "Matutulungan po kayo ng advisor sa insurance options at estimate. Subject po sa policies at approval ng insurance company ang application. Gusto po ba ninyo ng quotation?"
     },
     {
       "id": "INSURANCE_OFFER",
@@ -181,10 +181,10 @@
       "scenario": "Customer asks how much the insurance is",
       "when": "Range only. Never the old premium. Never promise approval.",
       "used_by": "assistant",
-      "en": "Car insurance is usually around {{insurance_price}}, depending on your car. The insurance company still has to approve it, and our advisor will confirm the final amount.",
-      "tl": "Ang car insurance po ay karaniwang around {{insurance_price}}, depende sa sasakyan. Aprubahan pa po ito ng insurance company, at kukumpirmahin ng advisor ang final na halaga.",
-      "fallback_en": "An advisor can confirm a car insurance estimate. The insurance company still has to approve it. Would you like to discuss insurance?",
-      "fallback_tl": "Advisor po ang magkukumpirma ng estimate sa car insurance. Kailangan pa rin ng approval ng insurance company. Gusto po ninyong pag-usapan ang insurance?"
+      "en": "Comprehensive insurance is estimated at around {{insurance_price}}, depending on the coverage and vehicle details. Please note that applications are subject to the insurer's policies and approval. Our advisor will be happy to confirm the final quotation.",
+      "tl": "Ang comprehensive insurance ay estimated na around {{insurance_price}}, depende sa coverage at vehicle details. Paalala lang po na subject sa policies at approval ng insurance company ang application. Tutulungan po kayo ng advisor na makuha ang final quotation.",
+      "fallback_en": "Our advisor can help provide an insurance estimate. Applications are subject to the insurer's policies and approval.",
+      "fallback_tl": "Matutulungan po kayo ng advisor sa insurance estimate. Subject po sa policies at approval ng insurance company ang application."
     },
     {
       "id": "RENEWAL_ASK_STATUS",
@@ -241,34 +241,66 @@
     {
       "id": "SLOTS_OFFER",
       "scenario": "Ask for a preferred date within the supplied window",
-      "when": "After one, two or three services have been explicitly selected. Do not require a response about unselected services. For exactly two services, prefer TWO_SERVICES_SELECTED to acknowledge and ask the booking date in one message. Respect registration validity checks and availability safeguards.",
+      "when": "After selection of one, two or three services, request a date in the supplied window. After a valid date, ask BOOKING_TIME_OFFER; do not save before customer confirms both date and time. If registration validity is uncertain, perform required checks first. DEMO: derive {{booking_window_start}} and {{booking_window_end}} from next-week working days intersected with actual customer renewal eligibility; do not offer weekend or out-of-renewal dates. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
       "used_by": "assistant",
-      "en": "For your selected services, which day from {{booking_window_start}} to {{booking_window_end}} works for a visit to {{branch_name}}? The dealership must confirm availability.",
-      "tl": "Para sa napili ninyong serbisyo, aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang gusto ninyo sa {{branch_name}}? Kailangan pang kumpirmahin ng dealership ang availability."
+      "en": "For {{services_list}}, which eligible working day next week, from {{booking_window_start}} to {{booking_window_end}}, works best for your visit to {{branch_name}}? Our team can help confirm your preferred schedule.",
+      "tl": "Para po sa {{services_list}}, aling eligible weekday next week mula {{booking_window_start}} hanggang {{booking_window_end}} ang convenient sa inyo sa {{branch_name}}? Tutulungan po kayo ng team namin sa schedule confirmation."
     },
     {
       "id": "SLOTS_OFFER_RENEWAL",
       "scenario": "Ask for a preferred date within the supplied window",
-      "when": "When registration is among the selected services and the customer is ready to choose a date, including registration plus one other service. Do not offer an unselected third service. Check registration validity if required before a drive-in date.",
+      "when": "Use for registration among selected services, after required validity checks. Ask date first, then BOOKING_TIME_OFFER. Do not ask about unselected services. DEMO: derive {{booking_window_start}} and {{booking_window_end}} from next-week working days intersected with actual customer renewal eligibility; do not offer weekend or out-of-renewal dates. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
       "used_by": "assistant",
-      "en": "For your selected services, which day from {{booking_window_start}} to {{booking_window_end}} works for a visit to {{branch_name}}? The dealership must confirm availability.",
-      "tl": "Para sa napili ninyong serbisyo, aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang gusto ninyo sa {{branch_name}}? Kailangan pang kumpirmahin ng dealership ang availability."
+      "en": "For {{services_list}}, which eligible working day next week, from {{booking_window_start}} to {{booking_window_end}}, works best for your visit to {{branch_name}}? Our team can help confirm your preferred schedule.",
+      "tl": "Para po sa {{services_list}}, aling eligible weekday next week mula {{booking_window_start}} hanggang {{booking_window_end}} ang convenient sa inyo sa {{branch_name}}? Tutulungan po kayo ng team namin sa schedule confirmation."
+    },
+    {
+      "id": "BOOKING_TIME_OFFER",
+      "scenario": "Ask for a preferred time after a valid date",
+      "when": "After an eligible next-week working date is selected and safety checks pass, request a preferred vehicle drop-off time between 8:00 AM and 2:00 PM inclusive, Asia/Manila. Show only actually supported slots if availability data exists; do not invent availability. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
+      "used_by": "assistant",
+      "en": "For {{services_list}} on {{selected_date}}, what drop-off time between 8:00 AM and 2:00 PM works best for you? Our team can help confirm availability.",
+      "tl": "Para po sa {{services_list}} sa {{selected_date}}, anong drop-off time mula 8:00 AM hanggang 2:00 PM ang convenient sa inyo? Tutulungan po kayo ng team namin sa availability confirmation."
+    },
+    {
+      "id": "BOOKING_TIME_INVALID",
+      "scenario": "Customer chooses a time outside the permitted booking hours",
+      "when": "Customer selects drop-off before 8:00 AM or after 2:00 PM Asia/Manila; ask for a new time within the inclusive window. Do not save invalid time. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
+      "used_by": "assistant",
+      "en": "For {{services_list}}, Toyota Manila Bay drop-off hours are between 8:00 AM and 2:00 PM. What time within that window would you prefer?",
+      "tl": "Para po sa {{services_list}}, ang drop-off hours ng Toyota Manila Bay ay 8:00 AM hanggang 2:00 PM. Anong oras po sa loob ng window na ito ang gusto ninyo?"
+    },
+    {
+      "id": "BOOKING_TIME_CONFIRM",
+      "scenario": "Confirm date, time and services before saving",
+      "when": "Confirm selected services, an eligible next-week weekday date within customer renewal window when applicable, and drop-off time from 8:00 AM to 2:00 PM inclusive (Asia/Manila). Wait for explicit yes before saving. Do not imply availability is confirmed. Render {{services_list}} as the exact service names explicitly chosen by the customer.",
+      "used_by": "assistant",
+      "en": "Just to confirm, would you like us to submit a visit request for {{services_list}} on {{selected_date}} at {{selected_time}} at {{branch_name}}? Our team will help confirm availability.",
+      "tl": "Para ma-confirm lang po, gusto po ba ninyong i-submit ang visit request para sa {{services_list}} sa {{selected_date}}, {{selected_time}}, sa {{branch_name}}? Tutulungan po kayo ng team namin na ma-confirm ang availability."
+    },
+    {
+      "id": "BOOKING_TIME_NO_AVAILABILITY",
+      "scenario": "No booking times available on the selected date",
+      "when": "Only if authoritative availability confirms no drop-off times between 8:00 AM and 2:00 PM on the eligible selected date. Offer another eligible weekday next week within renewal window. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
+      "used_by": "assistant",
+      "en": "For {{services_list}}, it looks like no drop-off times are available between 8:00 AM and 2:00 PM on {{selected_date}}. Would another eligible weekday from {{booking_window_start}} to {{booking_window_end}} work for you?",
+      "tl": "Para po sa {{services_list}}, mukhang wala nang available na drop-off time mula 8:00 AM hanggang 2:00 PM sa {{selected_date}}. May ibang eligible weekday po ba mula {{booking_window_start}} hanggang {{booking_window_end}} na convenient sa inyo?"
     },
     {
       "id": "SLOT_UNAVAILABLE",
       "scenario": "Date outside the window or unclear date",
-      "when": "Ask for one clear day in the current window. Never invent appointment hours.",
+      "when": "Date must be a next-week weekday and within actual renewal window when applicable. For demo as of 2026-10-16, next week is October 19-23, 2026; reject weekends, past dates, and dates outside customer eligibility. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
       "used_by": "assistant",
-      "en": "Please choose one day from {{booking_window_start}} to {{booking_window_end}}. Which date works for your visit request?",
-      "tl": "Pumili po ng isang araw mula {{booking_window_start}} hanggang {{booking_window_end}}. Aling petsa po ang gusto ninyo sa visit request?"
+      "en": "For {{services_list}}, we can accept visit requests on eligible working days next week, from {{booking_window_start}} to {{booking_window_end}}. Which date would you prefer?",
+      "tl": "Para po sa {{services_list}}, pwede tayong mag-request ng visit sa eligible weekdays next week mula {{booking_window_start}} hanggang {{booking_window_end}}. Aling petsa po ang gusto ninyo?"
     },
     {
       "id": "FEES",
       "scenario": "Registration fees",
       "when": "Owner asks what the renewal costs.",
       "used_by": "assistant",
-      "en": "Our registration fee is estimated at {{reg_service_fee}}, plus government registration charges at actual cost. Our advisor will give you the exact total.",
-      "tl": "Ang registration fee po namin ay tinatayang {{reg_service_fee}}, plus ang government registration charges sa actual na halaga. Ibibigay po ng advisor ang eksaktong total.",
+      "en": "Our registration service fee is estimated at {{reg_service_fee}}, plus government registration charges at actual cost. Our advisor will be happy to explain the breakdown and confirm the final total.",
+      "tl": "Estimated na {{reg_service_fee}} po ang registration service fee, bukod sa actual government registration charges. Masaya pong ipapaliwanag ng advisor ang breakdown at final total.",
       "fallback_en": "The advisor will confirm our fee and government registration charges. The government registration charges are fixed by law.",
       "fallback_tl": "Kukumpirmahin po ng advisor ang fee namin at ang government registration charges. Fixed po by law ang government registration charges."
     },
@@ -277,8 +309,8 @@
       "scenario": "Required basic insurance",
       "when": "Owner asks whether the basic insurance is needed, or what it is.",
       "used_by": "assistant",
-      "en": "The required basic insurance is renewed together with the registration. It can't be dropped if the registration goes ahead.",
-      "tl": "Kasabay po ng registration ang pag-renew ng required basic insurance. Hindi po ito pwedeng alisin kung tuloy ang registration."
+      "en": "The required basic insurance is part of the registration renewal requirements and is processed together with the renewal.",
+      "tl": "Kasama po sa registration renewal requirements ang required basic insurance, at sabay po itong inaasikaso sa renewal."
     },
     {
       "id": "EMISSION",
@@ -315,10 +347,10 @@
     {
       "id": "TWO_SERVICES_SELECTED",
       "scenario": "Customer selects exactly two of the three services, such as registration renewal and Preventative Maintenance Service",
-      "when": "When the customer explicitly chooses exactly two services, record those two only and immediately ask for a preferred booking date using the provided booking window. Do not ask about or offer the third service. Do not send a separate acknowledgement if this template is used. If registration validity requires checking first, run REG_VALID_CHECK before offering a drive-in date. A date is a request, not a confirmed reservation. Fill {{services_list}} with the two selected services.",
+      "when": "Customer selects exactly two services. Acknowledge those two and ask date immediately; never pitch third service. If registration validity needs checking, do that first. After valid date, use BOOKING_TIME_OFFER and then BOOKING_TIME_CONFIRM. No duplicate acknowledgements. DEMO: derive {{booking_window_start}} and {{booking_window_end}} from next-week working days intersected with actual customer renewal eligibility; do not offer weekend or out-of-renewal dates. Render {{services_list}} as the exact service names explicitly chosen by the customer.",
       "used_by": "assistant",
-      "en": "Absolutely! We can arrange {{services_list}} together. Which day from {{booking_window_start}} to {{booking_window_end}} would work for you at {{branch_name}}? The dealership will confirm availability.",
-      "tl": "Sige po! Pwede nating pagsabayin ang {{services_list}}. Aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang convenient sa inyo sa {{branch_name}}? Kailangan pa pong kumpirmahin ng dealership ang availability."
+      "en": "Of course! We can arrange {{services_list}} together. For next week (working days only), which day from {{booking_window_start}} to {{booking_window_end}} works best for you at {{branch_name}}?",
+      "tl": "Sige po! Pwede nating pagsabayin ang {{services_list}}. Para sa susunod na linggo (weekdays lang), aling araw mula {{booking_window_start}} hanggang {{booking_window_end}} ang convenient sa inyo sa {{branch_name}}?"
     },
     {
       "id": "ONLY_THIS_SERVICE",
@@ -357,16 +389,16 @@
       "scenario": "Negotiation: renewal feels expensive",
       "when": "Acknowledge, explain what is fixed, offer an advisor.",
       "used_by": "assistant",
-      "en": "I understand. Government registration charges are fixed by law, so I can't change those. Our own fee is estimated at {{reg_service_fee}}. Would you like to go ahead, or talk to an advisor about it?",
-      "tl": "Naiintindihan ko po. Fixed po by law ang government registration charges kaya hindi ko po mababago iyon. Tinatayang {{reg_service_fee}} po ang sariling fee namin. Gusto po ba ninyong ituloy, o makausap ang advisor tungkol dito?"
+      "en": "I understand. Government registration charges follow official rates, while our service fee is estimated at {{reg_service_fee}}. Our advisor can gladly walk you through the charges before you decide.",
+      "tl": "Naiintindihan ko po. Ayon sa official rates ang government registration charges, at estimated na {{reg_service_fee}} ang service fee namin. Maipapaliwanag po ng advisor ang charges bago kayo magdesisyon."
     },
     {
       "id": "DISCOUNT_ASK",
       "scenario": "Owner asks for a discount",
       "when": "No discount on government registration charges. Do not invent any promo.",
       "used_by": "assistant",
-      "en": "I can't offer a discount here. An advisor can confirm any current offers and the final estimate; government registration charges are separate at actual cost.",
-      "tl": "Hindi po ako makakapagbigay ng discount dito. Advisor po ang magko-confirm ng kasalukuyang offers at final estimate; hiwalay po ang actual government registration charges."
+      "en": "Our advisor will be happy to check any available promotions and explain the estimated charges. Government registration charges are separate and follow official rates.",
+      "tl": "Masaya pong iche-check ng advisor kung may available promotions at ipapaliwanag ang estimated charges. Hiwalay po ang government registration charges ayon sa official rates."
     },
     {
       "id": "THINKING_TIME",
@@ -381,82 +413,84 @@
       "scenario": "Customer asks something not in the sources",
       "when": "For example, what exactly is included. Do not guess.",
       "used_by": "assistant",
-      "en": "An advisor needs to confirm that detail. Please contact Toyota Manila Bay directly for help.",
-      "tl": "Advisor po ang kailangang magkumpirma ng detalyeng iyan. Kontakin po ang Toyota Manila Bay nang direkta para sa tulong."
+      "en": "Good question! Our Toyota Manila Bay team can provide the most accurate details. Please contact the dealership directly for assistance.",
+      "tl": "Magandang tanong po! Ang Toyota Manila Bay team ang makakapagbigay ng pinaka-accurate na details. Maaari po kayong direktang makipag-ugnayan sa dealership para sa tulong."
     },
     {
       "id": "BOOKING_CONFIRMED",
       "scenario": "Booking confirmed (sent by the service)",
-      "when": "The SERVICE sends this after the booking is written. The model never writes it.",
+      "when": "SERVICE sends only after a booking request has been successfully persisted with a valid date and selected time between 8:00 AM and 2:00 PM inclusive (Asia/Manila). This is a recorded request, not a confirmed appointment. Do not promise automatic reminders or proactive updates unless supported. {{slot_selected}} must include date and time. Demo date must be an eligible next-week working day and within customer renewal window if registration selected. Render {{services_list}} as the exact service names explicitly chosen by the customer.",
       "used_by": "service",
-      "en": "Recorded: {{services_list}} on {{slot_selected}} at {{branch_name}}. Ref {{booking_ref}}. Please contact the dealership to confirm the reservation and requirements.",
-      "tl": "Naitala po: {{services_list}} sa {{slot_selected}}, {{branch_name}}. Ref {{booking_ref}}. Kontakin po ang dealership para kumpirmahin ang reservation at requirements."
+      "en": "Thank you! Your visit request for {{services_list}} on {{slot_selected}} at {{branch_name}} has been recorded. Reference: {{booking_ref}}. Please coordinate with our dealership team to finalize the appointment and any requirements.",
+      "tl": "Salamat po! Naitala na ang visit request ninyo para sa {{services_list}} sa {{slot_selected}} sa {{branch_name}}. Reference: {{booking_ref}}. Makipag-ugnayan po sa dealership team para ma-finalize ang appointment at requirements.",
+      "sms_en": "Your visit request for {{services_list}} on {{slot_selected}} at {{branch_name}} is recorded. Ref: {{booking_ref}}. Please contact the dealership to finalize; availability is not confirmed.",
+      "sms_tl": "Naitala po ang request para sa {{services_list}} sa {{slot_selected}} sa {{branch_name}}. Ref: {{booking_ref}}. Kontakin po ang dealership para ma-finalize; hindi pa confirmed ang availability."
     },
     {
       "id": "SLOT_TAKEN",
       "scenario": "Date no longer within the remaining window",
-      "when": "The service sends this when the date is no longer valid, for example after midnight in Manila.",
+      "when": "Service sends when selected date/time is invalid or unavailable; suggest another eligible next-week weekday and drop-off time between 8:00 AM and 2:00 PM. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
       "used_by": "service",
-      "en": "That date is no longer within the remaining period. Please choose a day from {{booking_window_start}} to {{booking_window_end}}.",
-      "tl": "Wala na po sa natitirang period ang petsang iyon. Pumili po ng araw mula {{booking_window_start}} hanggang {{booking_window_end}}."
+      "en": "The requested date or time for {{services_list}} is no longer available. Could you choose another eligible weekday from {{booking_window_start}} to {{booking_window_end}}? Drop-off hours are 8:00 AM to 2:00 PM.",
+      "tl": "Hindi na po available ang requested date o time para sa {{services_list}}. Pwede po bang pumili ng ibang eligible weekday mula {{booking_window_start}} hanggang {{booking_window_end}}? Ang drop-off hours po ay 8:00 AM hanggang 2:00 PM."
     },
     {
       "id": "BOOKING_ERROR",
       "scenario": "Booking could not be saved (sent by the service)",
-      "when": "The SERVICE sends this if the booking store fails. Nothing is confirmed.",
+      "when": "The SERVICE sends this if the booking store fails. Nothing is confirmed. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
       "used_by": "service",
-      "en": "I couldn't save your request just now. Nothing has been reserved. Please try again or contact Toyota Manila Bay directly.",
-      "tl": "Hindi ko po nai-save ang request ninyo. Wala pa pong naka-reserve. Subukan po ulit o kontakin ang Toyota Manila Bay nang direkta."
+      "en": "Sorry, we were unable to save your visit request for {{services_list}} this time, so no appointment has been reserved. Please try again or contact our dealership team for assistance.",
+      "tl": "Pasensya na po, hindi na-save ang visit request para sa {{services_list}} sa ngayon kaya wala pang reserved appointment. Pwede po kayong sumubok ulit o makipag-ugnayan sa dealership team para sa tulong."
     },
     {
       "id": "EXPIRED_COLLECTION",
       "scenario": "Registration expired, pickup available",
       "when": "Owner says the renewal period has passed or the registration has expired, and collection_available is true.",
       "used_by": "assistant",
-      "en": "I can't arrange a pickup in this chat. Please contact Toyota Manila Bay for help without driving the car with expired registration.",
-      "tl": "Hindi po ako makakapag-arrange ng pickup dito. Kontakin po ang Toyota Manila Bay para sa tulong nang hindi i-drive ang sasakyang expired ang registration.",
-      "fallback_en": "Thanks for telling me. A car with an expired registration should not be driven, so I can't book a drive-in visit. An advisor will guide you on settling the registration first. Shall I have them contact you?",
-      "fallback_tl": "Salamat po sa pagsabi. Hindi po dapat i-drive ang sasakyang expired ang registration kaya hindi ako makakapag-book ng drive-in. Gagabayan po kayo ng advisor sa pag-asikaso muna ng registration. Ipa-contact ko po ba sila sa inyo?"
+      "en": "We would be happy to guide you on the next steps. Since the registration has expired, please avoid driving the vehicle and contact our dealership team to discuss safe options.",
+      "tl": "Tutulungan po namin kayo sa next steps. Dahil expired na ang registration, pakiwasan po munang i-drive ang sasakyan at makipag-ugnayan sa dealership para sa safe options.",
+      "fallback_en": "Thanks for letting us know. Please avoid driving while the registration is expired. Our dealership team can explain the next steps and any available collection options.",
+      "fallback_tl": "Salamat po sa pagsabi. Pakiwasan po munang i-drive ang sasakyan habang expired ang registration. Maipapaliwanag po ng dealership ang next steps at anumang available collection options."
     },
     {
       "id": "EXPIRED_NO_COLLECTION",
       "scenario": "Registration expired, no pickup",
       "when": "Owner says the renewal period has passed or the registration has expired, and collection_available is not true.",
       "used_by": "assistant",
-      "en": "I can't arrange a visit that requires driving with expired registration. Please contact Toyota Manila Bay for help with the next step.",
-      "tl": "Hindi po ako makakapag-book ng visit na kailangang i-drive ang sasakyang expired ang registration. Kontakin po ang Toyota Manila Bay para sa susunod na hakbang."
+      "en": "For your safety and to meet registration requirements, please avoid driving the vehicle while its registration is expired. Our dealership team can guide you on the next steps.",
+      "tl": "Para po sa inyong kaligtasan at pagsunod sa registration requirements, pakiwasan pong i-drive ang sasakyan habang expired ang registration. Matutulungan po kayo ng dealership sa next steps."
     },
     {
       "id": "DRIVE_IN_REFUSAL",
       "scenario": "Owner proposes to drive in while expired",
       "when": "Never agree. Do not endorse.",
       "used_by": "assistant",
-      "en": "I can't arrange a visit that requires driving with expired registration. Please contact Toyota Manila Bay for help with the next step.",
-      "tl": "Hindi po ako makakapag-book ng visit na kailangang i-drive ang sasakyang expired ang registration. Kontakin po ang Toyota Manila Bay para sa susunod na hakbang."
+      "en": "For your safety and to meet registration requirements, please avoid driving the vehicle while its registration is expired. Our dealership team can guide you on the next steps.",
+      "tl": "Para po sa inyong kaligtasan at pagsunod sa registration requirements, pakiwasan pong i-drive ang sasakyan habang expired ang registration. Matutulungan po kayo ng dealership sa next steps."
     },
     {
       "id": "SERVICE_ACCEPTED_ACK",
       "scenario": "Acknowledge the service just accepted",
-      "when": "Optional short acknowledgment only if the next message does not already acknowledge acceptance. Never prefix a duplicate acknowledgement; do not imply booking is confirmed.",
+      "when": "Optional short acknowledgment only if the next message does not already acknowledge acceptance. Never prefix a duplicate acknowledgement; do not imply booking is confirmed. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
       "used_by": "service",
-      "en": "Sure, I can help with that.",
-      "tl": "Sige po, tutulungan ko kayo diyan."
+      "en": "Sure, I can help with {{service_name}}.",
+      "tl": "Sige po, tutulungan ko kayo sa {{service_name}}."
     },
     {
       "id": "SERVICE_DECLINED_ACK",
       "scenario": "Acknowledge the service just declined",
-      "when": "Optional acknowledgment after declining a specific service; do not automatically pitch the remaining services. If customer declines all, close politely. Never double-acknowledge.",
+      "when": "Optional acknowledgment after declining a specific service; do not automatically pitch the remaining services. If customer declines all, close politely. Never double-acknowledge. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
       "used_by": "service",
-      "en": "Of course, no problem.",
-      "tl": "Sige po, walang problema."
+      "en": "Of course, we will leave out {{service_name}}.",
+      "tl": "Sige po, hindi na natin isasama ang {{service_name}}."
     },
     {
       "id": "SERVICE_SKIPPED_ACK",
       "scenario": "Acknowledge a service already handled or not needed",
-      "when": "Only if a brief acknowledgement is useful and not already in the next response. Do not launch another offer.",
+      "when": "Only if a brief acknowledgement is useful and not already in the next response. Do not launch another offer. Populate the service placeholder from the customer's actual selected services; do not substitute generic wording.",
       "used_by": "service",
-      "en": "Thanks for letting me know!",
-      "tl": "Salamat po sa pagsabi!"
+      "en": "Thanks for letting me know. We will leave out {{service_name}}.",
+      "tl": "Salamat po sa pagsabi. Hindi na natin isasama ang {{service_name}}."
     },
     {
       "id": "DECLINE_CLOSE",
@@ -479,16 +513,16 @@
       "scenario": "Callback agreed",
       "when": "callback_time comes from the owner's reply.",
       "used_by": "assistant",
-      "en": "I can't schedule a follow-up message here. You're welcome to message again whenever it suits you.",
-      "tl": "Hindi po ako makakapag-schedule ng follow-up message dito. Mag-message lang po ulit kapag okay sa inyo."
+      "en": "You are welcome to message us again whenever it is convenient for you. We will be happy to continue assisting you.",
+      "tl": "Pwede po kayong mag-message ulit kapag convenient sa inyo. Masaya po kaming tumulong ulit."
     },
     {
       "id": "HANDOFF",
       "scenario": "Owner asks for a person",
       "when": "Also used when the answer is not in the record or the templates, or the owner is upset.",
       "used_by": "assistant",
-      "en": "Of course. I can't connect you with an advisor here. Please contact Toyota Manila Bay directly for help.",
-      "tl": "Sige po. Hindi po ako makakapag-connect sa advisor dito. Kontakin po ang Toyota Manila Bay nang direkta para sa tulong."
+      "en": "Of course! Our Toyota Manila Bay team will be happy to assist you personally. You may contact the dealership directly.",
+      "tl": "Siyempre po! Masaya pong tutulong ang Toyota Manila Bay team sa inyo. Maaari po kayong direktang makipag-ugnayan sa dealership."
     },
     {
       "id": "OPTOUT_CONFIRM",
@@ -505,6 +539,14 @@
       "used_by": "assistant",
       "en": "Could you tell me a little more about what you'd like help with?",
       "tl": "Pwede po bang sabihin ninyo nang kaunti pa kung anong tulong ang kailangan ninyo?"
+    },
+    {
+      "id": "DEMO_NO_ELIGIBLE_DATE",
+      "scenario": "No working date next week overlaps the customer renewal eligibility window",
+      "when": "DEMO ONLY: If the next-week Monday-Friday date set intersected with the actual renewal eligibility window is empty, do not offer a booking date. Explain that there are no eligible demo dates and refer the customer to the dealership for alternatives.",
+      "used_by": "assistant",
+      "en": "For {{services_list}}, there are no eligible dates during next week's working days. Please contact our dealership team for other options.",
+      "tl": "Para po sa {{services_list}}, walang eligible dates sa weekdays ng susunod na linggo. Kontakin po ang dealership para sa ibang options."
     }
   ]
 }
