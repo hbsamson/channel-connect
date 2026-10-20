@@ -14,4 +14,10 @@ public record MessengerProperties(
         @NotBlank String pageId,
         @NotBlank String graphApiVersion,
         @Min(1) int queueCapacity) {
+	@Override
+	public String toString() {
+		return "MessengerProperties[appSecret=<redacted>, verifyToken=<redacted>, "
+				+ "pageAccessToken=<redacted>, pageId=<redacted>, graphApiVersion="
+				+ graphApiVersion + ", queueCapacity=" + queueCapacity + "]";
+	}
 }

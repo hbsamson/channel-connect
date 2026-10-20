@@ -1,4 +1,4 @@
-# Dealership campaign demo — October 16, 2026
+# Local dealership campaign guide
 
 The demo stores shared history, customer identity links, workflow state, outreach attempts, and appointments in file-based H2. All bundled customers, prices, hours, locations, and slots are fictional. A demo booking is an internal record, not a real dealership reservation. Dealership schedules use `Asia/Manila`.
 
@@ -9,30 +9,22 @@ The default demo still uses fictional SMS identities. Explicit GoIP mock mode re
 Use Java 25 and the checked-in Maven wrapper. From the repository root, in the first PowerShell terminal:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local,demo" "-Dspring-boot.run.arguments=--ai.provider=mock --debug=false"
 ```
 
-The launcher explicitly loads nonempty `.env` entries without evaluating them, activates `local,demo`, and selects deterministic mock AI. The `local` profile also imports repository-root `.env` for direct Maven and IntelliJ runs. Demo HTTP binds to `127.0.0.1:8080`; use an authenticated tunnel if testing real webhooks remotely.
+The `local` profile imports repository-root `.env` for Maven and IntelliJ runs. The command selects deterministic mock AI. Demo HTTP binds to `127.0.0.1:8080`; use an authenticated tunnel if testing real webhooks remotely. Use this guide only for local exploration; see the README's production deployment gates before planning a release.
 
-In a second terminal:
+Use the protected admin API examples below to seed customers, start campaigns, and submit simulated replies. `POST /reset` deletes dealership demo data, including tester links and appointments, and reseeds fictional customers; it leaves legacy Messenger tables intact. Prefer idempotent `POST /seed` to preserve existing work.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Run-Demo.ps1 -Reset
-```
-
-`-Reset` deletes the new dealership demo tables' contents, including tester links and demo appointments, and reseeds six fictional customers. It leaves the legacy Messenger tables intact. Without `-Reset`, seeding is idempotent and previously completed scenarios remain completed.
-
-The command scopes script execution permission to that PowerShell process; it does not change the machine's execution policy. If direct script execution is already allowed, the shorter `.\scripts\Start-Demo.ps1` and `.\scripts\Run-Demo.ps1 -Reset` invocations also work. The launcher disables inherited Spring debug tracing for the demo.
-
-For an entirely offline setup, use `Start-Demo.ps1 -NoEnv` and `Run-Demo.ps1 -NoEnv -Reset`. Default credentials in this mode are `demo` / `demo-local-only`; they are for the loopback demo only. Otherwise both scripts use `ADMIN_USERNAME` and `ADMIN_PASSWORD` from environment variables or `.env`.
+For an offline setup that ignores `.env`, add `--spring.config.import= --telegram.enabled=false --sms.enabled=false` to `spring-boot.run.arguments`. The `demo` profile provides `demo` / `demo-local-only` credentials when admin credentials are absent from the environment; these defaults are for the loopback demo only.
 
 To enable real OpenAI intent interpretation with the configured model:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1 -UseOpenAI
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local,demo" "-Dspring-boot.run.arguments=--ai.provider=openai --debug=false"
 ```
 
-Set `OPENAI_API_KEY` and `OPENAI_MODEL` first. The shared AI adapter uses the Responses API with the dealership prompt, recent cross-channel messages, an extractive context digest, approved catalog, customer facts, appointment, and workflow. Application services generate concise approved replies and commit booking actions. Model errors or invalid structured output fall back to the deterministic parser; this is visible in logs. The legacy Messenger file-search client remains in the repository but is no longer the dealership message processor.
+Set `OPENAI_API_KEY` and `OPENAI_MODEL` first. The shared AI adapter uses the Responses API with the dealership prompt, recent cross-channel messages, an extractive context digest, approved catalog, customer facts, appointment, and workflow. Application services generate concise approved replies and commit booking actions. Model errors or invalid structured output fall back to the deterministic parser; this is visible in logs.
 
 The shared request uses JSON output and the configured `OPENAI_REASONING_EFFORT`/`OPENAI_MAX_OUTPUT_TOKENS`. The default `minimal` effort suits the existing GPT-5 nano classification use case; see [OpenAI's GPT-5 parameter guide](https://developers.openai.com/cookbook/examples/gpt-5/gpt-5_new_params_and_tools). Keep these values compatible with the configured model.
 
@@ -73,7 +65,7 @@ Invoke-RestMethod -Method Post -Uri "$api/campaigns/advance" -Headers $auth -Con
 Invoke-RestMethod -Uri "$api/customers/demo-no-response" -Headers $auth
 ```
 
-In a new terminal, load the admin environment values first; the runner reads these from `.env` automatically.
+In a new terminal, set `ADMIN_USERNAME` and `ADMIN_PASSWORD` to match the running application before using the helpers. The application imports `.env`; PowerShell does not.
 
 | Route | Behavior |
 | --- | --- |
@@ -104,7 +96,7 @@ Use a new external ID for each real interaction; replaying one returns `DUPLICAT
 
 ## Real channels and verified identities
 
-Messenger and WhatsApp use the existing authenticated webhooks, queues, and send clients. They have automated tests against mocked boundaries; real sending/receiving has **not** been verified in this implementation session. SMS and Telegram are **simulated only**; neither has a provider gateway or bot webhook. Viber and voice are absent.
+Messenger and WhatsApp use authenticated webhooks, queues, and send clients. SMS and Telegram use simulations when disabled; real GoIP and Telegram adapters are available through explicit configuration. Real provider sending/receiving is not established by this guide. Viber and voice are absent.
 
 Keep tester identifiers in ignored local files, not committed fixtures. After verifying control of an account, link it through `POST /customers/demo-booking/identities`:
 
@@ -139,9 +131,9 @@ Use the actual approved template name and exact ordered body variables; its text
 
 ## Deterministic scenarios and persistence
 
-Run individual scenarios with `Run-Demo.ps1 -Scenario Booking`, `Switching`, `History`, `Reschedule`, `Inquiries`, or `Privacy`. Run with `-Reset` for a fresh scenario. Slots are fixed to October 16, 17, and 19, 2026 at 09:00, 10:00, and 14:00 Manila time, capacity two. Update the catalog for later demos.
+Use the admin API to explore booking, switching, history, rescheduling, inquiries, and privacy. Slots in the bundled catalog are fixed to October 16, 17, and 19, 2026 at 09:00, 10:00, and 14:00 Manila time, capacity two. These dates are historical; supply a catalog with future slots before demonstrating new bookings.
 
-The `All` runner demonstrates booking, three SMS attempts followed by Telegram fallback, a pending booking continued across channels, rescheduling and confirmed cancellation, grounded prices/hours/packages, an unrelated question redirected to services, and privacy/global opt-out. A real Messenger-to-Telegram scenario requires a real Telegram implementation; use linked Messenger/WhatsApp or an explicitly simulated Telegram step instead.
+The API supports booking, three unanswered attempts followed by channel fallback, cross-channel history, rescheduling and cancellation, grounded prices/hours/packages, and global opt-out. Enable and configure the Telegram connector before using a real linked Telegram account.
 
 To verify persistence, run a booking, stop the application with Ctrl+C, restart using the same database path, and retrieve that customer's view without resetting. Messages, workflow, appointments, attempts, identity links, and opt-out remain. Repeating the same campaign start or webhook ID does not create another accepted attempt/message. An interrupted in-flight send is marked `UNKNOWN`, and its campaign is `FAILED` for operator review; it is never automatically resent. The application cannot guarantee exactly-once external delivery across a crash without provider-side idempotency/reconciliation.
 
