@@ -2,11 +2,14 @@ package com.svi.channelconnect.telegram.client;
 
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.util.List;
 
 import com.svi.channelconnect.common.exception.ExternalFailureCategory;
 import com.svi.channelconnect.telegram.config.TelegramProperties;
 import com.svi.channelconnect.telegram.dto.request.TelegramSendTextMessageRequest;
+import com.svi.channelconnect.telegram.dto.request.TelegramSetWebhookRequest;
 import com.svi.channelconnect.telegram.dto.response.TelegramSendMessageResponse;
+import com.svi.channelconnect.telegram.dto.response.TelegramSetWebhookResponse;
 import com.svi.channelconnect.telegram.exception.TelegramApiException;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
@@ -69,6 +72,44 @@ public class TelegramApiClient {
 			throw new TelegramApiException(ExternalFailureCategory.MALFORMED_RESPONSE,
 					"Telegram API response could not be read", exception);
 		}
+	}
+
+	public void setWebhook(String url, String secretToken) {
+		try {
+			var response = restClient.post()
+					.uri("/bot{botId}:{token}/setWebhook", botId, token)
+					.body(new TelegramSetWebhookRequest(url, secretToken, List.of("message")))
+					.retrieve()
+					.body(TelegramSetWebhookResponse.class);
+			if (response == null || response.ok() == null) {
+				throw malformedWebhookResponse();
+			}
+			if (!response.ok()) {
+				if (response.errorCode() == null) throw malformedWebhookResponse();
+				throw new TelegramApiException(category(response.errorCode()), "Telegram API rejected webhook registration");
+			}
+			if (!Boolean.TRUE.equals(response.result())) throw malformedWebhookResponse();
+		}
+		catch (RestClientResponseException exception) {
+			throw new TelegramApiException(category(exception.getStatusCode().value()),
+					"Telegram webhook registration request failed", exception);
+		}
+		catch (ResourceAccessException exception) {
+			Throwable cause = exception.getMostSpecificCause();
+			throw new TelegramApiException(
+					cause instanceof HttpTimeoutException || cause instanceof SocketTimeoutException
+							? ExternalFailureCategory.TIMEOUT : ExternalFailureCategory.TRANSIENT,
+					"Telegram webhook registration network request failed", exception);
+		}
+		catch (RestClientException exception) {
+			throw new TelegramApiException(ExternalFailureCategory.MALFORMED_RESPONSE,
+					"Telegram webhook registration response could not be read", exception);
+		}
+	}
+
+	private TelegramApiException malformedWebhookResponse() {
+		return new TelegramApiException(ExternalFailureCategory.MALFORMED_RESPONSE,
+				"Telegram API did not confirm webhook registration");
 	}
 
 	private TelegramApiException malformedResponse() {

@@ -245,10 +245,31 @@ request cache are not a production delivery mechanism.
 ## Webhook setup and behavior
 
 Register a public HTTPS URL ending in `/webhooks/telegram` through Telegram's
-[`setWebhook`](https://core.telegram.org/bots/api#setwebhook) method. Pass
-`secret_token` matching `TELEGRAM_WEBHOOK_SECRET_TOKEN` and
-`allowed_updates=["message"]`. Registration is an operator action; application
-startup does not register or replace an existing webhook.
+[`setWebhook`](https://core.telegram.org/bots/api#setwebhook) method, either manually
+or automatically at application startup. For automatic registration, set:
+
+```dotenv
+TELEGRAM_ENABLED=true
+TELEGRAM_WEBHOOK_AUTO_REGISTER=true
+TELEGRAM_WEBHOOK_URL=https://your-public-host/webhooks/telegram
+```
+
+Keep `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET_TOKEN` configured as above.
+With the `local` profile, these settings are read from the repository-root `.env`.
+Start `ngrok http 8080` first, copy its HTTPS forwarding address into the full
+`TELEGRAM_WEBHOOK_URL`, then start or restart the application. Registration runs
+once during startup, after the HTTP server starts and before application readiness.
+It uses the configured secret and `allowed_updates=["message"]`, replaces any
+previous webhook for this bot, and preserves pending updates. Invalid URL settings
+or a failed registration stop startup with a safe error; success logs
+`Telegram webhook registered successfully`. Registration does not check whether
+the public URL actually forwards to this application. Keep the tunnel running.
+If its address changes, update `.env` and restart the application.
+
+`TELEGRAM_WEBHOOK_AUTO_REGISTER` defaults to `false`. When disabled, startup makes
+no registration request and leaves the bot's existing webhook unchanged. Manual
+registration must pass `secret_token` matching `TELEGRAM_WEBHOOK_SECRET_TOKEN` and
+`allowed_updates=["message"]`. Shutdown does not delete the registered webhook.
 
 Only new private text messages from non-bot users generate replies. Other update
 types are acknowledged without processing. Topic IDs are preserved in replies
