@@ -1,13 +1,17 @@
 <configuration>
     <springProperty scope="context" name="logDays" source="retention.log-days" defaultValue="14"/>
+    <springProperty scope="context" name="logMaxFileSize" source="logging.file.max-size" defaultValue="10MB"/>
+    <springProperty scope="context" name="logTotalSizeCap" source="logging.file.total-size-cap" defaultValue="1GB"/>
     <property name="logDirectory" value="${LOG_DIR:-logs}"/>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder><pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %logger{36} correlation=%X{correlationId} - %msg%n</pattern></encoder>
     </appender>
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${logDirectory}/channel-connect.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${logDirectory}/channel-connect.%d{yyyy-MM-dd}.log</fileNamePattern>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${logDirectory}/channel-connect.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>${logMaxFileSize}</maxFileSize>
+            <totalSizeCap>${logTotalSizeCap}</totalSizeCap>
             <maxHistory>${logDays}</maxHistory>
             <cleanHistoryOnStart>true</cleanHistoryOnStart>
         </rollingPolicy>

@@ -7,4 +7,8 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "admin")
 public record AdminProperties(@NotBlank String username, @NotBlank String password) {
+	@Override
+	public String toString() {
+		return "AdminProperties[username=<redacted>, password=<redacted>]";
+	}
 }

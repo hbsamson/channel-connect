@@ -18,17 +18,17 @@ To add a platform, implement `common.service.MessagingChannel` as a Spring bean 
 
 ## Configuration and local development
 
-Use `.env.example` as the configuration inventory. The `local` profile loads the repository-root `.env` directly; no launcher script or manual PowerShell assignments are required. Use unquoted `KEY=value` entries (Java properties syntax); escape literal backslashes as `\\`. Operating-system environment variables and command-line arguments override `.env`. Other profiles do not load `.env` automatically. `AI_PROVIDER=mock` selects deterministic dealership intent parsing; `openai` uses the shared history-aware AI boundary. The legacy Messenger OpenAI client remains available in the repository, but dealership workflows use the configurable prompt and approved catalog.
+Use `.env.example` as the configuration inventory. The `local` profile loads the repository-root `.env` directly; no launcher script or manual PowerShell assignments are required. Use unquoted `KEY=value` entries (Java properties syntax); escape literal backslashes as `\\`. Operating-system environment variables and command-line arguments override `.env`. Other profiles do not load `.env` automatically. `AI_PROVIDER=mock` selects deterministic dealership intent parsing; `openai` uses the shared history-aware AI boundary. All dealership workflows use the shared AI adapter, configurable prompt, and approved catalog. The unused Messenger AI client and its separate `openai.*` configuration have been removed; mock mode no longer requires an OpenAI key.
 
-For the October 16 campaign demo, run the PowerShell launcher and scenario runner described in [DEMO_GUIDE.md](DEMO_GUIDE.md). The launcher explicitly loads `.env` and supplies offline defaults for inactive connectors. SMS and Telegram are simulations; real Meta delivery requires configured tester accounts and live verification. The guide covers script execution, identity linking, campaign controls, persistence, and channel limitations.
+For local campaign exploration, use the direct Maven command and protected API examples in [DEMO_GUIDE.md](DEMO_GUIDE.md). The `demo` profile supplies offline defaults for inactive connectors. SMS and Telegram use simulations unless explicitly enabled. Real provider delivery requires configured accounts and verification.
 
 ```powershell
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
-.\mvnw.cmd test
-.\mvnw.cmd clean verify
+.\mvnw.cmd "-Dmaven.test.skip=true" compile
+.\mvnw.cmd "-Dmaven.test.skip=true" package
 ```
 
-Configuration, logging and Flyway migrations are under `src/main/resources`. Test settings and webhook fixtures are under `src/test/resources`. Tests use fake credentials and mocked external providers.
+Configuration, logging and Flyway migrations are under `src/main/resources`. Test settings and webhook fixtures are under `src/test/resources`. Repository policy requires an explicit request before running or modifying tests.
 
 ## Meta webhook setup
 
@@ -123,3 +123,19 @@ Webhook POST requests require valid Meta signatures. A WhatsApp template respons
 WhatsApp's dispatcher, outbound endpoint and process-local idempotency store are restricted to `local` and `test`. Production startup requires a durable WhatsApp dispatcher. Messenger's work queue is also in memory and can lose queued events on restart; its conversation persistence does not make the queue durable. Production delivery requires durable dispatch, deduplication and operational recovery.
 
 Campaign claims and attempts persist in H2; an interrupted send becomes an unknown outcome and is blocked from automatic resend. The demo supports one application instance, configured Manila appointment slots, and internal demo bookings. Human handoff records an event without sending external notifications. V3 adds dealership tables while preserving V1/V2 Messenger history, imported only for an explicitly verified identity.
+
+## Production deployment gates
+
+This repository is not yet ready for production delivery. Cleanup and successful compilation do not verify delivery guarantees or provider integration. Do not activate `local`, `test`, or `demo` to bypass the missing production dispatcher: these profiles enable nondurable delivery, simulations, and administrative demo controls.
+
+Before deployment:
+
+- Implement durable WhatsApp dispatch and replace Messenger's in-memory queue with durable admission, deduplication, bounded retries, and recovery. Enabled Telegram also requires a durable dispatcher outside `local`/`test`. Acknowledge webhooks only after durable admission; preserve provider acceptance versus confirmed delivery and unknown-send handling.
+- Supply real approved catalog, campaign, and customer configuration. Bundled fictional customers and October 2026 appointment slots are demonstration data. Scheduling and external reservation confirmation remain integration work.
+- Provision persistent storage and verify backup/restore, migrations, retention, and access control. The bundled database is file-based H2 for a single instance. Changing its JDBC URL does not establish support for another database; verify SQL compatibility and supply its driver before migrating. Preserve applied Flyway migrations and legacy history tables.
+- Supply secrets through the runtime environment or a secret store; keep admin access private and terminate HTTPS at a trusted ingress. Validate request limits, provider permissions, webhook signatures, and actual device/provider delivery in the target environment. GoIP hardware operation remains unverified.
+- Explicitly authorize and run automated tests, provider integration checks, security/dependency review, and load/restart/recovery verification before release. These checks are not covered by a production compilation.
+
+The runtime enables graceful HTTP shutdown. Messenger workers wait up to `MESSENGER_SHUTDOWN_TIMEOUT` (default `10s`) before interruption and report discarded queue counts; this does not prevent loss after a crash. Allow enough process termination time for HTTP shutdown and all connector drains; `SHUTDOWN_PHASE_TIMEOUT` defaults to `30s` per Spring lifecycle phase.
+
+Use `GET /actuator/health/liveness` for process availability and `GET /actuator/health/readiness` for application readiness plus database connectivity. These public endpoints hide details. They do not certify durable dispatch or external provider availability. Rolling logs default to `10MB` per file with a `1GB` archive cap and the configured retention period; override `LOGGING_FILE_MAX_SIZE`, `LOGGING_FILE_TOTAL_SIZE_CAP`, and `LOG_DIR` for the host. Pre-existing daily archives from the older naming pattern require separate retention management.
